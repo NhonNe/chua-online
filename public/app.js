@@ -408,10 +408,10 @@ function createMonkInstance(playerData) {
   // Vị trí xuất phát
   if (playerData.seatIndex !== undefined && playerData.seatIndex >= 0 && State.seats[playerData.seatIndex]) {
     clone.position.copy(State.seats[playerData.seatIndex].position);
-    clone.rotation.y = Math.PI;
+    clone.rotation.y = 0; // Hướng mặt về Đức Phật Bổn Sư
   } else if (playerData.x !== undefined && playerData.z !== undefined) {
     clone.position.set(playerData.x, playerData.isSitting ? 0.05 : 0.0, playerData.z);
-    clone.rotation.y = playerData.rot || Math.PI;
+    clone.rotation.y = playerData.rot || 0;
   }
 
   return {
@@ -494,20 +494,20 @@ function updateMonkAnimation(monkData, delta, time) {
     const wc = monkData.walkCycle;
     const stride = Math.sin(wc);
 
-    // 1.1. Chân bước sải ngắn dưới tà áo
+    // 1.1. Chân bước sải ngắn dưới tà áo (bước tới nhịp nhàng)
     if (b['thigh.L'] && base['thigh.L']) {
-      b['thigh.L'].rotation.x = base['thigh.L'].x - stride * 0.28;
+      b['thigh.L'].rotation.x = base['thigh.L'].x + stride * 0.28;
     }
     if (b['thigh.R'] && base['thigh.R']) {
-      b['thigh.R'].rotation.x = base['thigh.R'].x + stride * 0.28;
+      b['thigh.R'].rotation.x = base['thigh.R'].x - stride * 0.28;
     }
 
-    // 1.2. Đầu gối hơi nhấc nhẹ
+    // 1.2. Đầu gối gập tự nhiên về sau khi nhấc chân
     if (b['shin.L'] && base['shin.L']) {
-      b['shin.L'].rotation.x = base['shin.L'].x + Math.max(0, -stride) * 0.38;
+      b['shin.L'].rotation.x = base['shin.L'].x - Math.max(0, -stride) * 0.38;
     }
     if (b['shin.R'] && base['shin.R']) {
-      b['shin.R'].rotation.x = base['shin.R'].x + Math.max(0, stride) * 0.38;
+      b['shin.R'].rotation.x = base['shin.R'].x - Math.max(0, stride) * 0.38;
     }
 
     // 1.3. HAI TAY XẾP GỌN TRƯỚC BỤNG (KHÔNG ĐÁNH TAY TÙNG PHÈNG)
@@ -539,7 +539,7 @@ function updateMonkAnimation(monkData, delta, time) {
     // 1.5. Lắc lư thân mình chibi waddle nhẹ nhàng sang 2 bên
     if (b['spine'] && base['spine']) {
       b['spine'].rotation.z = Math.sin(wc) * 0.065;
-      b['spine'].rotation.x = base['spine'].x + 0.05;
+      b['spine'].rotation.x = base['spine'].x - 0.04;
     }
 
     // 1.6. Đầu nghiêng đối trọng cực đáng yêu
@@ -574,8 +574,8 @@ function updateMonkAnimation(monkData, delta, time) {
       bowFactor = Math.cos(((progress - 0.7) / 0.3) * (Math.PI / 2));
     }
 
-    if (b['spine']) b['spine'].rotation.x = THREE.MathUtils.lerp(base['spine']?.x || 0, 0.95, bowFactor);
-    if (b['head']) b['head'].rotation.x = THREE.MathUtils.lerp(base['head']?.x || 0, 0.6, bowFactor);
+    if (b['spine']) b['spine'].rotation.x = THREE.MathUtils.lerp(base['spine']?.x || 0, (base['spine']?.x || 0) - 0.85, bowFactor);
+    if (b['head']) b['head'].rotation.x = THREE.MathUtils.lerp(base['head']?.x || 0, (base['head']?.x || 0) - 0.55, bowFactor);
     if (b['hips']) b['hips'].position.y = THREE.MathUtils.lerp(0.7, 0.35, bowFactor);
 
     if (monkData.actionTimer >= 3.0) {
@@ -807,7 +807,7 @@ function sitDownAt(seatIndex) {
   if (!myP || !seat) return;
 
   myP.mesh.position.copy(seat.position);
-  myP.mesh.rotation.y = Math.PI;
+  myP.mesh.rotation.y = 0; // Hướng mặt về Đức Phật Bổn Sư
   State.mySeatIndex = seatIndex;
   State.isSitting = true;
   myP.isSitting = true;
@@ -1094,7 +1094,7 @@ function animate() {
         curPos.x += dirX * step;
         curPos.z += dirZ * step;
 
-        const targetAngle = Math.atan2(dirX, dirZ);
+        const targetAngle = Math.atan2(-dirX, -dirZ);
         let diff = targetAngle - myPlayer.mesh.rotation.y;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff > Math.PI) diff -= Math.PI * 2;
@@ -1146,7 +1146,7 @@ function animate() {
 
       myPlayer.mesh.position.copy(newPos);
 
-      const targetAngle = Math.atan2(moveDir.x, moveDir.z);
+      const targetAngle = Math.atan2(-moveDir.x, -moveDir.z);
       let diff = targetAngle - myPlayer.mesh.rotation.y;
       while (diff < -Math.PI) diff += Math.PI * 2;
       while (diff > Math.PI) diff -= Math.PI * 2;

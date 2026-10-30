@@ -72,7 +72,7 @@ wss.on('connection', (ws, req) => {
     action: 'idle',
     x: 0,
     z: 0,
-    rot: Math.PI,
+    rot: 0,
     isMoving: false,
     isSitting: true
   };
