@@ -585,9 +585,9 @@ function updateMonkAnimation(monkData, delta, time) {
     return;
   }
 
-  // 2.2. Chắp tay búp sen đảnh lễ (Gassho)
+  // 2.2. Chắp tay búp sen đảnh lễ (Gassho - Hai tay nâng cao trước ngực chắp búp sen rõ nét)
   if (action === 'gassho') {
-    const progress = Math.min(monkData.actionTimer / 2.2, 1.0);
+    const progress = Math.min(monkData.actionTimer / 2.5, 1.0);
     let gasshoFactor = 0;
     if (progress < 0.25) {
       gasshoFactor = progress / 0.25;
@@ -597,22 +597,42 @@ function updateMonkAnimation(monkData, delta, time) {
       gasshoFactor = (1.0 - progress) / 0.25;
     }
 
-    if (b['upper_arm.L'] && base['upper_arm.L']) b['upper_arm.L'].rotation.z = THREE.MathUtils.lerp(base['upper_arm.L'].z, -0.65, gasshoFactor);
-    if (b['upper_arm.R'] && base['upper_arm.R']) b['upper_arm.R'].rotation.z = THREE.MathUtils.lerp(base['upper_arm.R'].z, 0.65, gasshoFactor);
-    if (b['forearm.L']) b['forearm.L'].rotation.y = THREE.MathUtils.lerp(base['forearm.L']?.y || 0, 1.15, gasshoFactor);
-    if (b['forearm.R']) b['forearm.R'].rotation.y = THREE.MathUtils.lerp(base['forearm.R']?.y || 0, -1.15, gasshoFactor);
-    if (b['head']) b['head'].rotation.x = THREE.MathUtils.lerp(base['head']?.x || 0, (base['head']?.x || 0) - 0.20, gasshoFactor);
+    // Hai cánh tay nâng cao lên trước ngực, khuỷu tay mở rộng tạo dáng chắp tay búp sen uyển chuyển
+    if (b['upper_arm.L'] && base['upper_arm.L']) {
+      b['upper_arm.L'].rotation.x = THREE.MathUtils.lerp(base['upper_arm.L'].x, base['upper_arm.L'].x + 0.92, gasshoFactor);
+      b['upper_arm.L'].rotation.z = THREE.MathUtils.lerp(base['upper_arm.L'].z, -0.78, gasshoFactor);
+    }
+    if (b['upper_arm.R'] && base['upper_arm.R']) {
+      b['upper_arm.R'].rotation.x = THREE.MathUtils.lerp(base['upper_arm.R'].x, base['upper_arm.R'].x + 0.92, gasshoFactor);
+      b['upper_arm.R'].rotation.z = THREE.MathUtils.lerp(base['upper_arm.R'].z, 0.78, gasshoFactor);
+    }
+    // Cẳng tay hướng vào trong, hai bàn tay áp vào nhau ngay trước ngực
+    if (b['forearm.L']) {
+      b['forearm.L'].rotation.y = THREE.MathUtils.lerp(base['forearm.L']?.y || 0, 1.38, gasshoFactor);
+      b['forearm.L'].rotation.z = THREE.MathUtils.lerp(base['forearm.L']?.z || 0, -0.42, gasshoFactor);
+    }
+    if (b['forearm.R']) {
+      b['forearm.R'].rotation.y = THREE.MathUtils.lerp(base['forearm.R']?.y || 0, -1.38, gasshoFactor);
+      b['forearm.R'].rotation.z = THREE.MathUtils.lerp(base['forearm.R']?.z || 0, 0.42, gasshoFactor);
+    }
+    // Đầu và thân mình cúi nhẹ cung kính
+    if (b['spine'] && base['spine']) {
+      b['spine'].rotation.x = THREE.MathUtils.lerp(base['spine'].x, base['spine'].x - 0.20, gasshoFactor);
+    }
+    if (b['head'] && base['head']) {
+      b['head'].rotation.x = THREE.MathUtils.lerp(base['head'].x, base['head'].x - 0.32, gasshoFactor);
+    }
 
-    if (monkData.actionTimer >= 2.2) {
+    if (monkData.actionTimer >= 2.5) {
       monkData.currentAction = 'idle';
       monkData.actionTimer = 0;
     }
     return;
   }
 
-  // 2.3. Lạy Phật cúi đầu chạm đất (Bow / Kowtow)
+  // 2.3. Lạy Phật ngũ thể đầu địa (Full Prostration: Quỳ gối, cúi rạp người trán chạm sàn)
   if (action === 'bow') {
-    const progress = (monkData.actionTimer % 3.0) / 3.0;
+    const progress = (monkData.actionTimer % 3.2) / 3.2;
     let bowFactor = 0;
     if (progress < 0.35) {
       bowFactor = Math.sin((progress / 0.35) * (Math.PI / 2));
@@ -622,58 +642,90 @@ function updateMonkAnimation(monkData, delta, time) {
       bowFactor = Math.cos(((progress - 0.7) / 0.3) * (Math.PI / 2));
     }
 
-    if (b['spine']) b['spine'].rotation.x = THREE.MathUtils.lerp(base['spine']?.x || 0, (base['spine']?.x || 0) - 0.85, bowFactor);
-    if (b['head']) b['head'].rotation.x = THREE.MathUtils.lerp(base['head']?.x || 0, (base['head']?.x || 0) - 0.55, bowFactor);
-    if (b['hips']) b['hips'].position.y = THREE.MathUtils.lerp(0.7, 0.35, bowFactor);
+    // 1. Hai chân quỳ gập sát sàn (Kneel down)
+    if (b['thigh.L'] && base['thigh.L']) {
+      b['thigh.L'].rotation.x = THREE.MathUtils.lerp(base['thigh.L'].x, base['thigh.L'].x + 1.45, bowFactor);
+    }
+    if (b['thigh.R'] && base['thigh.R']) {
+      b['thigh.R'].rotation.x = THREE.MathUtils.lerp(base['thigh.R'].x, base['thigh.R'].x + 1.45, bowFactor);
+    }
+    if (b['shin.L'] && base['shin.L']) {
+      b['shin.L'].rotation.x = THREE.MathUtils.lerp(base['shin.L'].x, base['shin.L'].x - 1.60, bowFactor);
+    }
+    if (b['shin.R'] && base['shin.R']) {
+      b['shin.R'].rotation.x = THREE.MathUtils.lerp(base['shin.R'].x, base['shin.R'].x - 1.60, bowFactor);
+    }
+    // 2. Xương chậu hạ thấp xuống mặt sàn (Hông chạm gót)
+    if (b['hips']) {
+      b['hips'].position.y = THREE.MathUtils.lerp(0.70, 0.20, bowFactor);
+    }
+    // 3. Toàn thân gập sâu xuống, trán chạm đất
+    if (b['spine'] && base['spine']) {
+      b['spine'].rotation.x = THREE.MathUtils.lerp(base['spine'].x, base['spine'].x - 1.35, bowFactor);
+    }
+    if (b['head'] && base['head']) {
+      b['head'].rotation.x = THREE.MathUtils.lerp(base['head'].x, base['head'].x - 0.65, bowFactor);
+    }
+    // 4. Hai tay vươn ra chạm đất cung kính trước mặt
+    if (b['upper_arm.L'] && base['upper_arm.L']) {
+      b['upper_arm.L'].rotation.x = THREE.MathUtils.lerp(base['upper_arm.L'].x, base['upper_arm.L'].x + 1.25, bowFactor);
+      b['upper_arm.L'].rotation.z = THREE.MathUtils.lerp(base['upper_arm.L'].z, -0.35, bowFactor);
+    }
+    if (b['upper_arm.R'] && base['upper_arm.R']) {
+      b['upper_arm.R'].rotation.x = THREE.MathUtils.lerp(base['upper_arm.R'].x, base['upper_arm.R'].x + 1.25, bowFactor);
+      b['upper_arm.R'].rotation.z = THREE.MathUtils.lerp(base['upper_arm.R'].z, 0.35, bowFactor);
+    }
+    if (b['forearm.L']) b['forearm.L'].rotation.y = THREE.MathUtils.lerp(base['forearm.L']?.y || 0, 0.60, bowFactor);
+    if (b['forearm.R']) b['forearm.R'].rotation.y = THREE.MathUtils.lerp(base['forearm.R']?.y || 0, -0.60, bowFactor);
 
-    if (monkData.actionTimer >= 3.0) {
+    if (monkData.actionTimer >= 3.2) {
       monkData.currentAction = 'idle';
       monkData.actionTimer = 0;
     }
     return;
   }
 
-  // 3. TƯ THẾ TỌA THIỀN (Khi isSitting = true)
+  // 3. TƯ THẾ TỌA THIỀN (Khi isSitting = true: Xếp bằng kiết già, 2 tay kết ấn trên đùi)
   if (monkData.isSitting && !monkData.isMoving && action === 'idle') {
     const breath = Math.sin(time * 2.2 + (monkData.data?.seatIndex || 0)) * 0.02;
 
-    // Chân xếp bằng tọa thiền kiết già
+    // Chân xếp bằng tọa thiền kiết già rõ rệt
     if (b['thigh.L'] && base['thigh.L']) {
-      b['thigh.L'].rotation.x = THREE.MathUtils.lerp(b['thigh.L'].rotation.x, base['thigh.L'].x + 1.25, 0.15);
-      b['thigh.L'].rotation.z = THREE.MathUtils.lerp(b['thigh.L'].rotation.z, base['thigh.L'].z - 0.45, 0.15);
+      b['thigh.L'].rotation.x = THREE.MathUtils.lerp(b['thigh.L'].rotation.x, base['thigh.L'].x + 1.35, 0.2);
+      b['thigh.L'].rotation.z = THREE.MathUtils.lerp(b['thigh.L'].rotation.z, base['thigh.L'].z - 0.48, 0.2);
     }
     if (b['thigh.R'] && base['thigh.R']) {
-      b['thigh.R'].rotation.x = THREE.MathUtils.lerp(b['thigh.R'].rotation.x, base['thigh.R'].x + 1.25, 0.15);
-      b['thigh.R'].rotation.z = THREE.MathUtils.lerp(b['thigh.R'].rotation.z, base['thigh.R'].z + 0.45, 0.15);
+      b['thigh.R'].rotation.x = THREE.MathUtils.lerp(b['thigh.R'].rotation.x, base['thigh.R'].x + 1.35, 0.2);
+      b['thigh.R'].rotation.z = THREE.MathUtils.lerp(b['thigh.R'].rotation.z, base['thigh.R'].z + 0.48, 0.2);
     }
     if (b['shin.L'] && base['shin.L']) {
-      b['shin.L'].rotation.x = THREE.MathUtils.lerp(b['shin.L'].rotation.x, base['shin.L'].x - 1.45, 0.15);
+      b['shin.L'].rotation.x = THREE.MathUtils.lerp(b['shin.L'].rotation.x, base['shin.L'].x - 1.55, 0.2);
     }
     if (b['shin.R'] && base['shin.R']) {
-      b['shin.R'].rotation.x = THREE.MathUtils.lerp(b['shin.R'].rotation.x, base['shin.R'].x - 1.45, 0.15);
+      b['shin.R'].rotation.x = THREE.MathUtils.lerp(b['shin.R'].rotation.x, base['shin.R'].x - 1.55, 0.2);
     }
     if (b['foot.L'] && base['foot.L']) {
-      b['foot.L'].rotation.x = THREE.MathUtils.lerp(b['foot.L'].rotation.x, base['foot.L'].x, 0.15);
+      b['foot.L'].rotation.x = THREE.MathUtils.lerp(b['foot.L'].rotation.x, base['foot.L'].x, 0.2);
     }
     if (b['foot.R'] && base['foot.R']) {
-      b['foot.R'].rotation.x = THREE.MathUtils.lerp(b['foot.R'].rotation.x, base['foot.R'].x, 0.15);
+      b['foot.R'].rotation.x = THREE.MathUtils.lerp(b['foot.R'].rotation.x, base['foot.R'].x, 0.2);
     }
     if (b['hips']) {
-      b['hips'].position.y = THREE.MathUtils.lerp(b['hips'].position.y, 0.42, 0.15);
-      b['hips'].position.x = THREE.MathUtils.lerp(b['hips'].position.x, 0, 0.15);
+      b['hips'].position.y = THREE.MathUtils.lerp(b['hips'].position.y, 0.36, 0.2);
+      b['hips'].position.x = THREE.MathUtils.lerp(b['hips'].position.x, 0, 0.2);
     }
 
     // Hai tay đặt nhẹ nhàng kết ấn thiền trên đùi (Dhyana Mudra)
     if (b['upper_arm.L'] && base['upper_arm.L']) {
-      b['upper_arm.L'].rotation.x = THREE.MathUtils.lerp(b['upper_arm.L'].rotation.x, base['upper_arm.L'].x + 0.35, 0.15);
-      b['upper_arm.L'].rotation.z = THREE.MathUtils.lerp(b['upper_arm.L'].rotation.z, base['upper_arm.L'].z - 0.22, 0.15);
+      b['upper_arm.L'].rotation.x = THREE.MathUtils.lerp(b['upper_arm.L'].rotation.x, base['upper_arm.L'].x + 0.38, 0.2);
+      b['upper_arm.L'].rotation.z = THREE.MathUtils.lerp(b['upper_arm.L'].rotation.z, base['upper_arm.L'].z - 0.25, 0.2);
     }
     if (b['upper_arm.R'] && base['upper_arm.R']) {
-      b['upper_arm.R'].rotation.x = THREE.MathUtils.lerp(b['upper_arm.R'].rotation.x, base['upper_arm.R'].x + 0.35, 0.15);
-      b['upper_arm.R'].rotation.z = THREE.MathUtils.lerp(b['upper_arm.R'].rotation.z, base['upper_arm.R'].z + 0.22, 0.15);
+      b['upper_arm.R'].rotation.x = THREE.MathUtils.lerp(b['upper_arm.R'].rotation.x, base['upper_arm.R'].x + 0.38, 0.2);
+      b['upper_arm.R'].rotation.z = THREE.MathUtils.lerp(b['upper_arm.R'].rotation.z, base['upper_arm.R'].z + 0.25, 0.2);
     }
-    if (b['forearm.L']) b['forearm.L'].rotation.y = THREE.MathUtils.lerp(b['forearm.L'].rotation.y, 0.85, 0.15);
-    if (b['forearm.R']) b['forearm.R'].rotation.y = THREE.MathUtils.lerp(b['forearm.R'].rotation.y, -0.85, 0.15);
+    if (b['forearm.L']) b['forearm.L'].rotation.y = THREE.MathUtils.lerp(b['forearm.L'].rotation.y, 0.95, 0.2);
+    if (b['forearm.R']) b['forearm.R'].rotation.y = THREE.MathUtils.lerp(b['forearm.R'].rotation.y, -0.95, 0.2);
 
     // Lưng thẳng, nhịp thở tĩnh tại
     if (b['spine'] && base['spine']) {
@@ -962,7 +1014,7 @@ function sitDownNearest() {
   if (!myP) return;
 
   let nearestSeat = -1;
-  let minDist = Infinity;
+  let minDist = 2.5;
   State.seats.forEach((seat) => {
     let occupied = false;
     State.players.forEach((p) => {
@@ -981,6 +1033,21 @@ function sitDownNearest() {
 
   if (nearestSeat !== -1) {
     sitDownAt(nearestSeat);
+  } else {
+    // Tĩnh tọa xếp bằng kiết già ngay tại vị trí hiện tại
+    State.mySeatIndex = -1;
+    State.isSitting = true;
+    myP.isSitting = true;
+    State.destination = null;
+    State.destinationSeat = null;
+    State.isAutoWalking = false;
+    updateSitButtonUI();
+    updateSeatVisuals();
+    playTempleBellSound();
+    showToast('Tĩnh tọa niệm Phật thanh tịnh 🧘');
+    if (State.ws && State.ws.readyState === WebSocket.OPEN) {
+      State.ws.send(JSON.stringify({ type: 'change_seat', seatIndex: -1 }));
+    }
   }
 }
 
@@ -1015,39 +1082,63 @@ window.addEventListener('pointerdown', (e) => {
 
   floorRaycaster.setFromCamera(mouse, camera);
 
-  // Chạm bồ đoàn để ngồi
+  // 1. Kiểm tra chạm bồ đoàn trực tiếp
+  let targetSeatIndex = null;
   const seatHits = floorRaycaster.intersectObjects(seatMeshes);
   if (seatHits.length > 0) {
-    const seatIdx = seatHits[0].object.userData.seatIndex;
-    const seat = State.seats[seatIdx];
-    if (seat) {
-      showTargetMarker(seat.position.x, seat.position.z);
-      const myP = State.players.get(State.self?.id);
-      if (myP) {
-        if (State.isSitting) standUp();
-        State.destination = seat.position.clone();
-        State.destinationSeat = seatIdx;
-        State.isAutoWalking = true;
-      }
-      return;
-    }
+    targetSeatIndex = seatHits[0].object.userData.seatIndex;
   }
 
-  // Chạm sàn gỗ để di chuyển
+  // 2. Chạm sàn gỗ
   const floorHits = floorRaycaster.intersectObject(floor);
   if (floorHits.length > 0) {
     const pt = floorHits[0].point;
     pt.x = THREE.MathUtils.clamp(pt.x, -6.5, 6.5);
     pt.z = THREE.MathUtils.clamp(pt.z, -4.5, 6.5);
 
-    showTargetMarker(pt.x, pt.z);
-
-    if (State.isSitting) {
-      standUp();
+    // Nếu chưa trúng bồ đoàn trực tiếp, kiểm tra xem có chạm gần bồ đoàn nào trong bán kính 0.65m không
+    if (targetSeatIndex === null) {
+      let closestDist = 0.65;
+      State.seats.forEach((seat) => {
+        const d = Math.hypot(pt.x - seat.position.x, pt.z - seat.position.z);
+        if (d < closestDist) {
+          closestDist = d;
+          targetSeatIndex = seat.index;
+        }
+      });
     }
-    State.destination = pt;
-    State.destinationSeat = null;
-    State.isAutoWalking = true;
+
+    const myP = State.players.get(State.self?.id);
+
+    // Xử lý chạm bồ đoàn
+    if (targetSeatIndex !== null && State.seats[targetSeatIndex]) {
+      const seat = State.seats[targetSeatIndex];
+      showTargetMarker(seat.position.x, seat.position.z);
+
+      if (myP) {
+        const curDist = Math.hypot(myP.mesh.position.x - seat.position.x, myP.mesh.position.z - seat.position.z);
+        if (curDist < 0.35) {
+          sitDownAt(targetSeatIndex);
+        } else {
+          if (State.isSitting) standUp();
+          State.destination = seat.position.clone();
+          State.destinationSeat = targetSeatIndex;
+          State.isAutoWalking = true;
+        }
+      }
+      return;
+    }
+
+    // Xử lý chạm sàn gỗ trống: đi tới điểm đó
+    showTargetMarker(pt.x, pt.z);
+    if (myP) {
+      if (State.isSitting) {
+        standUp();
+      }
+      State.destination = pt;
+      State.destinationSeat = null;
+      State.isAutoWalking = true;
+    }
   }
 });
 
