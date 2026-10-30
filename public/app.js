@@ -10,6 +10,7 @@ const State = {
   audioEnabled: false,
   beadCount: 0,
   roundCount: 0,
+  mokoCount: 0,
   ws: null,
   monkTemplate: null,
   buddhaMesh: null,
@@ -43,22 +44,22 @@ function playWoodblockSound() {
     const filter = ctx.createBiquadFilter();
 
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(620, ctx.currentTime);
+    osc.frequency.setValueAtTime(640, ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(320, ctx.currentTime + 0.08);
 
     filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(600, ctx.currentTime);
-    filter.Q.setValueAtTime(4, ctx.currentTime);
+    filter.frequency.setValueAtTime(620, ctx.currentTime);
+    filter.Q.setValueAtTime(4.5, ctx.currentTime);
 
     gain.gain.setValueAtTime(1.0, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.11);
 
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(ctx.destination);
 
     osc.start();
-    osc.stop(ctx.currentTime + 0.12);
+    osc.stop(ctx.currentTime + 0.11);
 
     if (navigator.vibrate) navigator.vibrate(25);
   } catch (e) {}
@@ -196,16 +197,12 @@ scene.add(backWall);
 
 // ==========================================
 // 3. BỒ ĐOÀN HÌNH VUÔNG (Chuẩn xác theo video viral TikTok)
-// Đệm vuông phẳng màu xám tro vải thô 0x343638
 // ==========================================
 const cushionGeo = new THREE.BoxGeometry(0.72, 0.05, 0.72);
 const cushionMat = new THREE.MeshStandardMaterial({ color: 0x333538, roughness: 0.9 });
 const cushionMatActive = new THREE.MeshStandardMaterial({ color: 0x8a6a2c, roughness: 0.75 });
 
-const cushionRaycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
 const seatMeshes = [];
-
 const COLS = 6;
 const ROWS = 6;
 const SPACING_X = 1.35;
@@ -351,7 +348,6 @@ function finishLoading() {
       loadingScreen.style.opacity = '0';
       setTimeout(() => (loadingScreen.style.display = 'none'), 600);
     }
-    // Tạo không khí đông đúc (12 đồng tu ngồi tịnh tâm như video viral)
     spawnTempleCrowd();
     connectWebSocket();
   }, 400);
@@ -372,7 +368,7 @@ function createMonkInstance(playerData) {
 
   const bones = {};
   clone.traverse((obj) => {
-    if (obj.isBone || obj.type === 'Bone' || (obj.name && (obj.name.includes('arm') || obj.name.includes('hand') || obj.name.includes('spine') || obj.name.includes('head') || obj.name.includes('hips') || obj.name.includes('thigh') || obj.name.includes('shin')))) {
+    if (obj.isBone || obj.type === 'Bone' || (obj.name && (obj.name.includes('arm') || obj.name.includes('hand') || obj.name.includes('spine') || obj.name.includes('head') || obj.name.includes('hips') || obj.name.includes('thigh') || obj.name.includes('shin') || obj.name.includes('foot')))) {
       bones[obj.name] = obj;
     }
   });
@@ -405,10 +401,10 @@ function createMonkInstance(playerData) {
 
   scene.add(clone);
 
-  // Vị trí xuất phát
+  // Vị trí xuất phát (mặt luôn hướng về tượng Phật z < 0)
   if (playerData.seatIndex !== undefined && playerData.seatIndex >= 0 && State.seats[playerData.seatIndex]) {
     clone.position.copy(State.seats[playerData.seatIndex].position);
-    clone.rotation.y = 0; // Hướng mặt về Đức Phật Bổn Sư
+    clone.rotation.y = 0;
   } else if (playerData.x !== undefined && playerData.z !== undefined) {
     clone.position.set(playerData.x, playerData.isSitting ? 0.05 : 0.0, playerData.z);
     clone.rotation.y = playerData.rot || 0;
@@ -436,9 +432,7 @@ function captureBaseRotations(bones) {
   return bases;
 }
 
-// ==========================================
-// 6. TẠO KHÔNG KHÍ ĐỒNG TU ĐÔNG ĐÚC (Chuẩn video viral "7749 người tới tụng kinh")
-// ==========================================
+// 6. Đồng tu tụng kinh trong Chánh điện
 const CROWD_NAMES = [
   'Thích Tuệ Giác', 'Thích Minh Tuệ', 'Thích An Nhiên', 'Thích Giác Ngộ',
   'Thích Thiện Tâm', 'Thích Viên Minh', 'Thích Tịnh Không', 'Thích Pháp Tạng',
@@ -470,8 +464,11 @@ function spawnTempleCrowd() {
 
 // ==========================================
 // 7. XỬ LÝ CHUYỂN ĐỘNG THEO VIDEO VIRAL SANSA TEMPLE
-// - Dáng đi Kinh Hành: 2 tay chắp/xếp gọn trước bụng trong tà áo tràng
-// - Chân bước ngắn, nhịp nhàng, thân lắc nhẹ chibi waddle
+// - Dáng đi Kinh Hành: 2 tay xếp gọn trước bụng trong áo tràng
+// - Chân bước sải sải nhịp nhàng, 2 chân cử động rõ rệt
+// - Tọa thiền: Xếp bằng tĩnh tọa, 2 tay kết ấn thiền trên đùi
+// - Gõ mõ: Tay phải nhấc dùi gõ mõ theo nhịp
+// - Chắp tay & Lạy Phật: Trang nghiêm, thanh tịnh
 // ==========================================
 function updateMonkAnimation(monkData, delta, time) {
   if (!monkData || !monkData.bones) return;
@@ -481,7 +478,7 @@ function updateMonkAnimation(monkData, delta, time) {
 
   monkData.actionTimer += delta;
 
-  // Cập nhật cao độ êm ái giữa ngồi thiền (y=0.05 trên bồ đoàn) và đi bộ (y=0.0 trên sàn)
+  // Cập nhật cao độ êm dịu giữa ngồi thiền (y=0.05) và đi bộ (y=0.0)
   if (monkData.mesh) {
     const targetY = monkData.isSitting ? 0.05 : 0.0;
     monkData.mesh.position.y = THREE.MathUtils.lerp(monkData.mesh.position.y, targetY, 0.15);
@@ -489,29 +486,39 @@ function updateMonkAnimation(monkData, delta, time) {
 
   // 1. DÁNG ĐI BỘ / KINH HÀNH CHUẨN XÁC THEO VIDEO TIKTOK
   if (monkData.isMoving) {
-    // Tần số bước chân ngắn, nhanh nhẹn, thanh thoát (~9.5 rad/s)
-    monkData.walkCycle = (monkData.walkCycle || 0) + delta * 9.5;
+    monkData.walkCycle = (monkData.walkCycle || 0) + delta * 9.2;
     const wc = monkData.walkCycle;
     const stride = Math.sin(wc);
 
-    // 1.1. Chân bước sải ngắn dưới tà áo (bước tới nhịp nhàng)
+    // 1.1. Chân bước sải sải rõ rệt (Đùi vung tới trước / lùi sau)
     if (b['thigh.L'] && base['thigh.L']) {
-      b['thigh.L'].rotation.x = base['thigh.L'].x + stride * 0.28;
+      b['thigh.L'].rotation.x = base['thigh.L'].x + stride * 0.65;
+      b['thigh.L'].rotation.z = base['thigh.L'].z;
     }
     if (b['thigh.R'] && base['thigh.R']) {
-      b['thigh.R'].rotation.x = base['thigh.R'].x - stride * 0.28;
+      b['thigh.R'].rotation.x = base['thigh.R'].x - stride * 0.65;
+      b['thigh.R'].rotation.z = base['thigh.R'].z;
     }
 
-    // 1.2. Đầu gối gập tự nhiên về sau khi nhấc chân
+    // 1.2. Đầu gối gập tự nhiên về sau khi nhấc gót
     if (b['shin.L'] && base['shin.L']) {
-      b['shin.L'].rotation.x = base['shin.L'].x - Math.max(0, -stride) * 0.38;
+      b['shin.L'].rotation.x = base['shin.L'].x - Math.max(0, -stride) * 0.85;
     }
     if (b['shin.R'] && base['shin.R']) {
-      b['shin.R'].rotation.x = base['shin.R'].x - Math.max(0, stride) * 0.38;
+      b['shin.R'].rotation.x = base['shin.R'].x - Math.max(0, stride) * 0.85;
     }
 
-    // 1.3. HAI TAY XẾP GỌN TRƯỚC BỤNG (KHÔNG ĐÁNH TAY TÙNG PHÈNG)
-    // Tay áo tràng thủ lễ cung kính
+    // 1.3. Uốn bàn chân (Foot roll) để mũi chân và gót chân cử động sống động
+    if (b['foot.L'] && base['foot.L']) {
+      const flexL = stride > 0 ? stride * 0.35 : -Math.max(0, -stride) * 0.45;
+      b['foot.L'].rotation.x = base['foot.L'].x + flexL;
+    }
+    if (b['foot.R'] && base['foot.R']) {
+      const flexR = stride < 0 ? -stride * 0.35 : -Math.max(0, stride) * 0.45;
+      b['foot.R'].rotation.x = base['foot.R'].x + flexR;
+    }
+
+    // 1.4. Hai tay khép gọn gàng trước bụng trong vạt áo tràng thủ lễ
     if (b['upper_arm.L'] && base['upper_arm.L']) {
       b['upper_arm.L'].rotation.x = base['upper_arm.L'].x + 0.42;
       b['upper_arm.L'].rotation.y = base['upper_arm.L'].y - 0.25;
@@ -522,52 +529,93 @@ function updateMonkAnimation(monkData, delta, time) {
       b['upper_arm.R'].rotation.y = base['upper_arm.R'].y + 0.25;
       b['upper_arm.R'].rotation.z = base['upper_arm.R'].z + 0.40;
     }
-    if (b['forearm.L'] && base['forearm.L']) {
+    if (b['forearm.L']) {
       b['forearm.L'].rotation.y = 0.85;
       b['forearm.L'].rotation.z = -0.32;
     }
-    if (b['forearm.R'] && base['forearm.R']) {
+    if (b['forearm.R']) {
       b['forearm.R'].rotation.y = -0.85;
       b['forearm.R'].rotation.z = 0.32;
     }
 
-    // 1.4. Nhấp nhô xương chậu (Pelvis vertical bounce)
+    // 1.5. Nhấp nhô xương chậu (Pelvis vertical bounce) và chuyển trọng tâm
     if (b['hips']) {
-      b['hips'].position.y = 0.70 + Math.abs(Math.sin(wc)) * 0.024;
+      b['hips'].position.y = 0.70 + Math.abs(Math.sin(wc)) * 0.038;
+      b['hips'].position.x = Math.sin(wc) * 0.028;
     }
 
-    // 1.5. Lắc lư thân mình chibi waddle nhẹ nhàng sang 2 bên
+    // 1.6. Thân mình lắc lư chibi waddle sang 2 bên
     if (b['spine'] && base['spine']) {
-      b['spine'].rotation.z = Math.sin(wc) * 0.065;
-      b['spine'].rotation.x = base['spine'].x - 0.04;
+      b['spine'].rotation.z = Math.sin(wc) * 0.085;
+      b['spine'].rotation.x = base['spine'].x - 0.05;
     }
 
-    // 1.6. Đầu nghiêng đối trọng cực đáng yêu
+    // 1.7. Đầu nghiêng đối trọng cực đáng yêu
     if (b['head'] && base['head']) {
-      b['head'].rotation.z = -Math.sin(wc) * 0.048;
-      b['head'].rotation.x = base['head'].x - 0.02 + Math.sin(wc * 2) * 0.012;
+      b['head'].rotation.z = -Math.sin(wc) * 0.06;
+      b['head'].rotation.x = base['head'].x - 0.02 + Math.sin(wc * 2) * 0.015;
     }
 
     return;
   }
 
-  // 2. CÁC HÀNH ĐỘNG TƯƠNG TÁC (Chắp tay, Lạy Phật)
-  // Chắp tay búp sen (Gassho)
-  if (action === 'gassho') {
-    const t = Math.min(monkData.actionTimer * 4.0, 1.0);
-    if (b['upper_arm.L']) b['upper_arm.L'].rotation.z = THREE.MathUtils.lerp(base['upper_arm.L']?.z || 0, -0.65, t);
-    if (b['upper_arm.R']) b['upper_arm.R'].rotation.z = THREE.MathUtils.lerp(base['upper_arm.R']?.z || 0, 0.65, t);
-    if (b['forearm.L']) b['forearm.L'].rotation.y = THREE.MathUtils.lerp(base['forearm.L']?.y || 0, 1.15, t);
-    if (b['forearm.R']) b['forearm.R'].rotation.y = THREE.MathUtils.lerp(base['forearm.R']?.y || 0, -1.15, t);
-    if (b['head']) b['head'].rotation.x = THREE.MathUtils.lerp(base['head']?.x || 0, 0.16, t);
+  // 2. CÁC HÀNH ĐỘNG TƯƠNG TÁC: GÕ MÕ, CHẮP TAY, LẠY PHẬT
+  // 2.1. Hành động Gõ Mõ (Woodblock)
+  if (action === 'woodblock') {
+    const tapProgress = Math.min(monkData.actionTimer * 6.0, 1.0);
+    const tapFactor = Math.sin(tapProgress * Math.PI);
+
+    // Tay phải nhấc dùi gõ mõ nhịp nhàng
+    if (b['upper_arm.R'] && base['upper_arm.R']) {
+      b['upper_arm.R'].rotation.x = THREE.MathUtils.lerp(base['upper_arm.R'].x + 0.5, base['upper_arm.R'].x + 0.2, tapFactor);
+      b['upper_arm.R'].rotation.z = THREE.MathUtils.lerp(base['upper_arm.R'].z + 0.2, base['upper_arm.R'].z + 0.4, tapFactor);
+    }
+    if (b['forearm.R']) {
+      b['forearm.R'].rotation.y = THREE.MathUtils.lerp(-0.8, -1.25, tapFactor);
+      b['forearm.R'].rotation.z = THREE.MathUtils.lerp(0.3, 0.65, tapFactor);
+    }
+    if (b['head']) {
+      b['head'].rotation.x = THREE.MathUtils.lerp(base['head']?.x || 0, (base['head']?.x || 0) - 0.18, tapFactor);
+    }
+
+    if (monkData.actionTimer >= 0.4) {
+      monkData.currentAction = 'idle';
+      monkData.actionTimer = 0;
+    }
     return;
   }
-  // Lạy Phật (Kowtow / Cúi lạy sát đất)
-  else if (action === 'bow') {
+
+  // 2.2. Chắp tay búp sen đảnh lễ (Gassho)
+  if (action === 'gassho') {
+    const progress = Math.min(monkData.actionTimer / 2.2, 1.0);
+    let gasshoFactor = 0;
+    if (progress < 0.25) {
+      gasshoFactor = progress / 0.25;
+    } else if (progress < 0.75) {
+      gasshoFactor = 1.0;
+    } else {
+      gasshoFactor = (1.0 - progress) / 0.25;
+    }
+
+    if (b['upper_arm.L'] && base['upper_arm.L']) b['upper_arm.L'].rotation.z = THREE.MathUtils.lerp(base['upper_arm.L'].z, -0.65, gasshoFactor);
+    if (b['upper_arm.R'] && base['upper_arm.R']) b['upper_arm.R'].rotation.z = THREE.MathUtils.lerp(base['upper_arm.R'].z, 0.65, gasshoFactor);
+    if (b['forearm.L']) b['forearm.L'].rotation.y = THREE.MathUtils.lerp(base['forearm.L']?.y || 0, 1.15, gasshoFactor);
+    if (b['forearm.R']) b['forearm.R'].rotation.y = THREE.MathUtils.lerp(base['forearm.R']?.y || 0, -1.15, gasshoFactor);
+    if (b['head']) b['head'].rotation.x = THREE.MathUtils.lerp(base['head']?.x || 0, (base['head']?.x || 0) - 0.20, gasshoFactor);
+
+    if (monkData.actionTimer >= 2.2) {
+      monkData.currentAction = 'idle';
+      monkData.actionTimer = 0;
+    }
+    return;
+  }
+
+  // 2.3. Lạy Phật cúi đầu chạm đất (Bow / Kowtow)
+  if (action === 'bow') {
     const progress = (monkData.actionTimer % 3.0) / 3.0;
     let bowFactor = 0;
-    if (progress < 0.4) {
-      bowFactor = Math.sin((progress / 0.4) * (Math.PI / 2));
+    if (progress < 0.35) {
+      bowFactor = Math.sin((progress / 0.35) * (Math.PI / 2));
     } else if (progress < 0.7) {
       bowFactor = 1.0;
     } else {
@@ -585,27 +633,97 @@ function updateMonkAnimation(monkData, delta, time) {
     return;
   }
 
-  // 3. TRẠNG THÁI TĨNH TÂM / TỌA THIỀN (Nhịp thở thanh tịnh)
-  const breath = Math.sin(time * 2.2 + (monkData.data?.seatIndex || 0)) * 0.022;
-  if (b['spine'] && base['spine']) {
-    b['spine'].rotation.x = THREE.MathUtils.lerp(b['spine'].rotation.x, base['spine'].x + breath * 0.4, 0.1);
-    b['spine'].rotation.z = THREE.MathUtils.lerp(b['spine'].rotation.z, 0, 0.1);
-  }
-  if (b['head'] && base['head']) {
-    b['head'].rotation.x = THREE.MathUtils.lerp(b['head'].rotation.x, base['head'].x - breath * 0.3, 0.1);
-    b['head'].rotation.z = THREE.MathUtils.lerp(b['head'].rotation.z, 0, 0.1);
+  // 3. TƯ THẾ TỌA THIỀN (Khi isSitting = true)
+  if (monkData.isSitting && !monkData.isMoving && action === 'idle') {
+    const breath = Math.sin(time * 2.2 + (monkData.data?.seatIndex || 0)) * 0.02;
+
+    // Chân xếp bằng tọa thiền kiết già
+    if (b['thigh.L'] && base['thigh.L']) {
+      b['thigh.L'].rotation.x = THREE.MathUtils.lerp(b['thigh.L'].rotation.x, base['thigh.L'].x + 1.25, 0.15);
+      b['thigh.L'].rotation.z = THREE.MathUtils.lerp(b['thigh.L'].rotation.z, base['thigh.L'].z - 0.45, 0.15);
+    }
+    if (b['thigh.R'] && base['thigh.R']) {
+      b['thigh.R'].rotation.x = THREE.MathUtils.lerp(b['thigh.R'].rotation.x, base['thigh.R'].x + 1.25, 0.15);
+      b['thigh.R'].rotation.z = THREE.MathUtils.lerp(b['thigh.R'].rotation.z, base['thigh.R'].z + 0.45, 0.15);
+    }
+    if (b['shin.L'] && base['shin.L']) {
+      b['shin.L'].rotation.x = THREE.MathUtils.lerp(b['shin.L'].rotation.x, base['shin.L'].x - 1.45, 0.15);
+    }
+    if (b['shin.R'] && base['shin.R']) {
+      b['shin.R'].rotation.x = THREE.MathUtils.lerp(b['shin.R'].rotation.x, base['shin.R'].x - 1.45, 0.15);
+    }
+    if (b['foot.L'] && base['foot.L']) {
+      b['foot.L'].rotation.x = THREE.MathUtils.lerp(b['foot.L'].rotation.x, base['foot.L'].x, 0.15);
+    }
+    if (b['foot.R'] && base['foot.R']) {
+      b['foot.R'].rotation.x = THREE.MathUtils.lerp(b['foot.R'].rotation.x, base['foot.R'].x, 0.15);
+    }
+    if (b['hips']) {
+      b['hips'].position.y = THREE.MathUtils.lerp(b['hips'].position.y, 0.42, 0.15);
+      b['hips'].position.x = THREE.MathUtils.lerp(b['hips'].position.x, 0, 0.15);
+    }
+
+    // Hai tay đặt nhẹ nhàng kết ấn thiền trên đùi (Dhyana Mudra)
+    if (b['upper_arm.L'] && base['upper_arm.L']) {
+      b['upper_arm.L'].rotation.x = THREE.MathUtils.lerp(b['upper_arm.L'].rotation.x, base['upper_arm.L'].x + 0.35, 0.15);
+      b['upper_arm.L'].rotation.z = THREE.MathUtils.lerp(b['upper_arm.L'].rotation.z, base['upper_arm.L'].z - 0.22, 0.15);
+    }
+    if (b['upper_arm.R'] && base['upper_arm.R']) {
+      b['upper_arm.R'].rotation.x = THREE.MathUtils.lerp(b['upper_arm.R'].rotation.x, base['upper_arm.R'].x + 0.35, 0.15);
+      b['upper_arm.R'].rotation.z = THREE.MathUtils.lerp(b['upper_arm.R'].rotation.z, base['upper_arm.R'].z + 0.22, 0.15);
+    }
+    if (b['forearm.L']) b['forearm.L'].rotation.y = THREE.MathUtils.lerp(b['forearm.L'].rotation.y, 0.85, 0.15);
+    if (b['forearm.R']) b['forearm.R'].rotation.y = THREE.MathUtils.lerp(b['forearm.R'].rotation.y, -0.85, 0.15);
+
+    // Lưng thẳng, nhịp thở tĩnh tại
+    if (b['spine'] && base['spine']) {
+      b['spine'].rotation.x = THREE.MathUtils.lerp(b['spine'].rotation.x, base['spine'].x + breath * 0.4, 0.1);
+      b['spine'].rotation.z = THREE.MathUtils.lerp(b['spine'].rotation.z, 0, 0.1);
+    }
+    if (b['head'] && base['head']) {
+      b['head'].rotation.x = THREE.MathUtils.lerp(b['head'].rotation.x, base['head'].x - breath * 0.3, 0.1);
+      b['head'].rotation.z = THREE.MathUtils.lerp(b['head'].rotation.z, 0, 0.1);
+    }
+    return;
   }
 
-  // Hồi phục các xương tay chân
-  for (let k in base) {
-    if (b[k] && !k.includes('spine') && !k.includes('head')) {
-      b[k].rotation.x = THREE.MathUtils.lerp(b[k].rotation.x, base[k].x, 0.12);
-      b[k].rotation.y = THREE.MathUtils.lerp(b[k].rotation.y, base[k].y, 0.12);
-      b[k].rotation.z = THREE.MathUtils.lerp(b[k].rotation.z, base[k].z, 0.12);
+  // 4. TƯ THẾ ĐỨNG TĨNH TÂM (Khi !isSitting && !isMoving && action === 'idle')
+  if (!monkData.isSitting && !monkData.isMoving && action === 'idle') {
+    const breath = Math.sin(time * 2.2) * 0.02;
+
+    // Chân đứng thẳng vững chãi
+    for (let k of ['thigh.L', 'thigh.R', 'shin.L', 'shin.R', 'foot.L', 'foot.R']) {
+      if (b[k] && base[k]) {
+        b[k].rotation.x = THREE.MathUtils.lerp(b[k].rotation.x, base[k].x, 0.15);
+        b[k].rotation.y = THREE.MathUtils.lerp(b[k].rotation.y, base[k].y, 0.15);
+        b[k].rotation.z = THREE.MathUtils.lerp(b[k].rotation.z, base[k].z, 0.15);
+      }
     }
-  }
-  if (b['hips']) {
-    b['hips'].position.y = THREE.MathUtils.lerp(b['hips'].position.y, 0.70, 0.1);
+    if (b['hips']) {
+      b['hips'].position.y = THREE.MathUtils.lerp(b['hips'].position.y, 0.70, 0.15);
+      b['hips'].position.x = THREE.MathUtils.lerp(b['hips'].position.x, 0, 0.15);
+    }
+
+    // Hai tay thủ lễ nhẹ nhàng trước bụng
+    if (b['upper_arm.L'] && base['upper_arm.L']) {
+      b['upper_arm.L'].rotation.x = THREE.MathUtils.lerp(b['upper_arm.L'].rotation.x, base['upper_arm.L'].x + 0.42, 0.15);
+      b['upper_arm.L'].rotation.z = THREE.MathUtils.lerp(b['upper_arm.L'].rotation.z, base['upper_arm.L'].z - 0.40, 0.15);
+    }
+    if (b['upper_arm.R'] && base['upper_arm.R']) {
+      b['upper_arm.R'].rotation.x = THREE.MathUtils.lerp(b['upper_arm.R'].rotation.x, base['upper_arm.R'].x + 0.42, 0.15);
+      b['upper_arm.R'].rotation.z = THREE.MathUtils.lerp(b['upper_arm.R'].rotation.z, base['upper_arm.R'].z + 0.40, 0.15);
+    }
+    if (b['forearm.L']) b['forearm.L'].rotation.y = THREE.MathUtils.lerp(b['forearm.L'].rotation.y, 0.85, 0.15);
+    if (b['forearm.R']) b['forearm.R'].rotation.y = THREE.MathUtils.lerp(b['forearm.R'].rotation.y, -0.85, 0.15);
+
+    if (b['spine'] && base['spine']) {
+      b['spine'].rotation.x = THREE.MathUtils.lerp(b['spine'].rotation.x, base['spine'].x + breath * 0.4, 0.1);
+      b['spine'].rotation.z = THREE.MathUtils.lerp(b['spine'].rotation.z, 0, 0.1);
+    }
+    if (b['head'] && base['head']) {
+      b['head'].rotation.x = THREE.MathUtils.lerp(b['head'].rotation.x, base['head'].x - breath * 0.3, 0.1);
+      b['head'].rotation.z = THREE.MathUtils.lerp(b['head'].rotation.z, 0, 0.1);
+    }
   }
 }
 
@@ -642,7 +760,7 @@ function handleServerMessage(msg) {
     State.self = msg.self;
     State.mySeatIndex = msg.self.seatIndex;
     State.isSitting = msg.self.isSitting !== undefined ? msg.self.isSitting : true;
-    updateBowButtonLabel();
+    updateSitButtonUI();
 
     const nameEl = document.getElementById('user-display-name');
     if (nameEl) nameEl.textContent = msg.self.name;
@@ -706,6 +824,8 @@ function handleServerMessage(msg) {
       showToast(`${msg.name} vừa chắp tay đảnh lễ 🙏`);
     } else if (msg.action === 'bow' && msg.id !== State.self?.id) {
       showToast(`${msg.name} vừa kính cẩn lạy Phật 🙇`);
+    } else if (msg.action === 'woodblock' && msg.id !== State.self?.id) {
+      playWoodblockSound();
     }
   }
 
@@ -742,17 +862,30 @@ function updateSeatVisuals() {
   });
 }
 
-function updateBowButtonLabel() {
-  const bowIcon = document.getElementById('bow-icon');
-  const bowLabel = document.getElementById('bow-label');
-  if (!bowIcon || !bowLabel) return;
+// Nút Tọa thiền / Đứng dậy
+const btnToggleSit = document.getElementById('btn-toggle-sit');
+const sitIcon = document.getElementById('sit-icon');
+const sitLabel = document.getElementById('sit-label');
+
+function updateSitButtonUI() {
+  if (!sitIcon || !sitLabel) return;
   if (State.isSitting) {
-    bowIcon.textContent = '🙇';
-    bowLabel.textContent = 'Lạy Phật';
+    sitIcon.textContent = '🚶';
+    sitLabel.textContent = 'Đứng dậy';
   } else {
-    bowIcon.textContent = '🧘';
-    bowLabel.textContent = 'Tọa thiền';
+    sitIcon.textContent = '🧘';
+    sitLabel.textContent = 'Ngồi thiền';
   }
+}
+
+if (btnToggleSit) {
+  btnToggleSit.addEventListener('click', () => {
+    if (State.isSitting) {
+      standUp();
+    } else {
+      sitDownNearest();
+    }
+  });
 }
 
 // Gửi di chuyển throttled
@@ -789,7 +922,7 @@ function sendAction(actionName) {
 function standUp() {
   State.isSitting = false;
   State.mySeatIndex = -1;
-  updateBowButtonLabel();
+  updateSitButtonUI();
   updateSeatVisuals();
 
   const myP = State.players.get(State.self?.id);
@@ -815,7 +948,7 @@ function sitDownAt(seatIndex) {
   State.destinationSeat = null;
   State.isAutoWalking = false;
 
-  updateBowButtonLabel();
+  updateSitButtonUI();
   updateSeatVisuals();
   playTempleBellSound();
 
@@ -867,13 +1000,13 @@ function showToast(text) {
 }
 
 // ==========================================
-// 9. ĐIỀU KHIỂN: TAP-TO-MOVE (Chuẩn Video Sansa Temple) + NÚT CAPSULE
+// 9. ĐIỀU KHIỂN: TAP-TO-MOVE + JOYSTICK + BÀN PHÍM + NÚT BẤM
 // ==========================================
+// 9.1. Tap-to-move
 const floorRaycaster = new THREE.Raycaster();
 
 window.addEventListener('pointerdown', (e) => {
-  // Bỏ qua nếu chạm vào UI hoặc nút bấm
-  if (e.target.tagName === 'BUTTON' || e.target.closest('.bottom-bar') || e.target.closest('.top-nav') || e.target.closest('.modal-overlay') || e.target.closest('.user-info-card')) {
+  if (e.target.tagName === 'BUTTON' || e.target.closest('.bottom-bar') || e.target.closest('.top-nav') || e.target.closest('.modal-overlay') || e.target.closest('.user-info-card') || e.target.closest('.joystick-container') || e.target.closest('.toggle-sit-btn')) {
     return;
   }
 
@@ -882,7 +1015,7 @@ window.addEventListener('pointerdown', (e) => {
 
   floorRaycaster.setFromCamera(mouse, camera);
 
-  // 1. Kiểm tra xem người dùng có chạm vào Bồ đoàn không
+  // Chạm bồ đoàn để ngồi
   const seatHits = floorRaycaster.intersectObjects(seatMeshes);
   if (seatHits.length > 0) {
     const seatIdx = seatHits[0].object.userData.seatIndex;
@@ -892,7 +1025,6 @@ window.addEventListener('pointerdown', (e) => {
       const myP = State.players.get(State.self?.id);
       if (myP) {
         if (State.isSitting) standUp();
-        // Cho chú tiểu bước tới bồ đoàn đó rồi tự động ngồi xuống
         State.destination = seat.position.clone();
         State.destinationSeat = seatIdx;
         State.isAutoWalking = true;
@@ -901,11 +1033,10 @@ window.addEventListener('pointerdown', (e) => {
     }
   }
 
-  // 2. Chạm vào sàn gỗ để di chuyển (Tap-to-Move)
+  // Chạm sàn gỗ để di chuyển
   const floorHits = floorRaycaster.intersectObject(floor);
   if (floorHits.length > 0) {
     const pt = floorHits[0].point;
-    // Giới hạn biên sàn Chánh điện
     pt.x = THREE.MathUtils.clamp(pt.x, -6.5, 6.5);
     pt.z = THREE.MathUtils.clamp(pt.z, -4.5, 6.5);
 
@@ -920,11 +1051,78 @@ window.addEventListener('pointerdown', (e) => {
   }
 });
 
-// Điều khiển Bàn phím (WASD)
+// 9.2. Virtual Joystick Cảm ứng cho Mobile
+const joystickContainer = document.getElementById('joystick-container');
+const joystickThumb = document.getElementById('joystick-thumb');
+let joystickTouchId = null;
+let joystickCenter = { x: 0, y: 0 };
+const JOYSTICK_RADIUS = 38;
+
+if (joystickContainer && joystickThumb) {
+  joystickContainer.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const touch = e.changedTouches[0];
+    joystickTouchId = touch.identifier;
+    const rect = joystickContainer.getBoundingClientRect();
+    joystickCenter = {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2
+    };
+    handleJoystickMove(touch.clientX, touch.clientY);
+  }, { passive: false });
+
+  window.addEventListener('touchmove', (e) => {
+    if (joystickTouchId === null) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === joystickTouchId) {
+        handleJoystickMove(e.changedTouches[i].clientX, e.changedTouches[i].clientY);
+        break;
+      }
+    }
+  }, { passive: false });
+
+  function resetJoystick() {
+    joystickTouchId = null;
+    State.moveVector.x = 0;
+    State.moveVector.z = 0;
+    joystickThumb.style.transform = `translate(0px, 0px)`;
+  }
+
+  window.addEventListener('touchend', (e) => {
+    if (joystickTouchId === null) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === joystickTouchId) {
+        resetJoystick();
+        break;
+      }
+    }
+  });
+  window.addEventListener('touchcancel', resetJoystick);
+
+  function handleJoystickMove(clientX, clientY) {
+    let dx = clientX - joystickCenter.x;
+    let dy = clientY - joystickCenter.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > JOYSTICK_RADIUS) {
+      dx = (dx / dist) * JOYSTICK_RADIUS;
+      dy = (dy / dist) * JOYSTICK_RADIUS;
+    }
+    joystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
+    State.moveVector.x = dx / JOYSTICK_RADIUS;
+    State.moveVector.z = dy / JOYSTICK_RADIUS;
+
+    if (State.isSitting) {
+      standUp();
+    }
+    State.isAutoWalking = false;
+    State.destination = null;
+  }
+}
+
+// 9.3. Điều khiển Bàn phím (WASD)
 window.addEventListener('keydown', (e) => {
   State.keys[e.key.toLowerCase()] = true;
   State.keys[e.code] = true;
-  // Khi ấn phím thì hủy tap-to-move
   State.isAutoWalking = false;
   State.destination = null;
 });
@@ -933,29 +1131,40 @@ window.addEventListener('keyup', (e) => {
   State.keys[e.code] = false;
 });
 
-// Nút Capsule: Chắp tay
+// 9.4. Nút bấm tương tác
+// Nút: Chắp tay
 const btnGassho = document.getElementById('btn-gassho');
 if (btnGassho) {
   btnGassho.addEventListener('click', () => {
     sendAction('gassho');
     playTempleBellSound();
+    showToast('Chắp tay búp sen đảnh lễ Tam Bảo 🙏');
   });
 }
 
-// Nút Capsule: Lạy Phật / Tọa thiền
+// Nút: Lạy Phật
 const btnBow = document.getElementById('btn-bow');
 if (btnBow) {
   btnBow.addEventListener('click', () => {
-    if (State.isSitting) {
-      sendAction('bow');
-      playTempleBellSound();
-    } else {
-      sitDownNearest();
-    }
+    sendAction('bow');
+    playTempleBellSound();
+    showToast('Kính cẩn lạy Phật tiêu trừ nghiệp chướng 🙇');
   });
 }
 
-// Nút Capsule: Tràng Hạt Bồ Đề
+// Nút: Gõ mõ
+const btnWoodblock = document.getElementById('btn-woodblock');
+const mokoCountEl = document.getElementById('moko-count');
+if (btnWoodblock) {
+  btnWoodblock.addEventListener('click', () => {
+    State.mokoCount++;
+    if (mokoCountEl) mokoCountEl.textContent = State.mokoCount;
+    playWoodblockSound();
+    sendAction('woodblock');
+  });
+}
+
+// Nút: Tràng Hạt Bồ Đề
 const beadsModal = document.getElementById('beads-modal');
 const beadSwipeZone = document.getElementById('bead-swipe-zone');
 const currentBead = document.getElementById('current-bead');
@@ -1114,17 +1323,19 @@ function animate() {
       }
     }
 
-    // 2. Xử lý Bàn phím (WASD)
-    let inputX = 0;
-    let inputZ = 0;
+    // 2. Xử lý Joystick và Bàn phím (WASD)
+    let inputX = State.moveVector.x;
+    let inputZ = State.moveVector.z;
     if (State.keys['w'] || State.keys['arrowup'] || State.keys['keyw']) inputZ -= 1;
     if (State.keys['s'] || State.keys['arrowdown'] || State.keys['keys']) inputZ += 1;
     if (State.keys['a'] || State.keys['arrowleft'] || State.keys['keya']) inputX -= 1;
     if (State.keys['d'] || State.keys['arrowright'] || State.keys['keyd']) inputX += 1;
 
     const inputLen = Math.hypot(inputX, inputZ);
-    if (inputLen > 0.1) {
+    if (inputLen > 0.08) {
       if (State.isSitting) standUp();
+      State.isAutoWalking = false;
+      State.destination = null;
       isMovingNow = true;
 
       const camDir = new THREE.Vector3();
@@ -1134,8 +1345,8 @@ function animate() {
       const camSide = new THREE.Vector3(-camDir.z, 0, camDir.x);
 
       const moveDir = new THREE.Vector3()
-        .addScaledVector(camDir, -inputZ / inputLen)
-        .addScaledVector(camSide, inputX / inputLen);
+        .addScaledVector(camDir, -inputZ / Math.max(1, inputLen))
+        .addScaledVector(camSide, inputX / Math.max(1, inputLen));
 
       const moveStep = moveDir.clone().multiplyScalar(State.moveSpeed * delta);
       const newPos = myPlayer.mesh.position.clone().add(moveStep);
@@ -1169,7 +1380,7 @@ function animate() {
     camera.position.add(deltaTarget);
   }
 
-  // Cập nhật tất cả người chơi & đồng tu
+  // Cập nhật tất cả người chơi & đồng tu (bao gồm cả nhân vật của chính mình)
   State.players.forEach((p, id) => {
     if (id !== State.self?.id && p.targetPos) {
       p.mesh.position.lerp(p.targetPos, 0.2);

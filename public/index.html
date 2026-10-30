@@ -79,20 +79,32 @@
     </div>
   </div>
 
-  <!-- Thanh tác vụ nổi 3 nút hình viên nhộng (Chuẩn video Sansa Temple) -->
+  <!-- Nút chuyển đổi Tọa thiền / Đứng dậy -->
+  <button id="btn-toggle-sit" class="toggle-sit-btn" title="Ngồi thiền hoặc Đứng dậy">
+    <span id="sit-icon">🚶</span>
+    <span id="sit-label">Đứng dậy</span>
+  </button>
+
+  <!-- Thanh tác vụ hành động phía dưới màn hình -->
   <nav class="bottom-bar">
     <div class="bottom-capsule">
-      <button class="capsule-btn" id="btn-gassho">
+      <button class="capsule-btn" id="btn-gassho" title="Chắp tay đảnh lễ">
         <span class="btn-icon">🙏</span>
         <span class="btn-label">Chắp tay</span>
       </button>
 
-      <button class="capsule-btn" id="btn-bow">
+      <button class="capsule-btn" id="btn-bow" title="Kính cẩn lạy Phật">
         <span class="btn-icon" id="bow-icon">🙇</span>
         <span class="btn-label" id="bow-label">Lạy Phật</span>
       </button>
 
-      <button class="capsule-btn" id="btn-beads">
+      <button class="capsule-btn" id="btn-woodblock" title="Gõ mõ tịnh tâm">
+        <span class="btn-icon">🪵</span>
+        <span class="btn-label">Gõ mõ</span>
+        <span class="badge" id="moko-count">0</span>
+      </button>
+
+      <button class="capsule-btn" id="btn-beads" title="Lần tràng hạt 108 hạt">
         <span class="btn-icon">📿</span>
         <span class="btn-label">Tràng hạt</span>
       </button>
