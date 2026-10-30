@@ -1,0 +1,22 @@
+{
+  "name": "Chùa Online — Tịnh Tâm & Niệm Phật",
+  "short_name": "Chùa Online",
+  "description": "Không gian chiêm bái, tọa thiền và niệm Phật trực tuyến cùng đại chúng",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#1a1815",
+  "theme_color": "#23211d",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#23211d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Chùa Online">
+  <meta name="description" content="Chùa Online - Không gian chiêm bái, tọa thiền và niệm Phật trực tuyến 3D">
+  
+  <title>Chùa Online — Tịnh Tâm & Niệm Phật</title>
+  
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/style.css">
+
+  <!-- Three.js & Loaders -->
+  <script src="/lib/three.min.js"></script>
+  <script src="/lib/GLTFLoader.js"></script>
+  <script src="/lib/OrbitControls.js"></script>
+</head>
+<body>
+  <!-- Màn hình tải ban đầu -->
+  <div id="loading-screen" class="loading-screen">
+    <div class="lotus-loader">
+      <div class="lotus-icon">🪷</div>
+      <h2>Chùa Online</h2>
+      <p id="loading-text">Đang chuẩn bị không gian thanh tịnh...</p>
+      <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+    </div>
+  </div>
+
+  <!-- Khung cảnh 3D -->
+  <div id="canvas-container"></div>
+
+  <!-- Giao diện Header trên cùng -->
+  <header class="top-nav">
+    <div class="room-badge">
+      <span class="room-icon">🏯</span>
+      <span id="room-name">Chánh Điện 01</span>
+    </div>
+    
+    <div class="stats-group">
+      <div class="online-pill" id="online-counter">
+        <span class="dot"></span>
+        <span id="online-count">1</span> đang tịnh tâm
+      </div>
+      
+      <button class="nav-btn" id="btn-audio" title="Bật/Tắt âm thanh tụng kinh">
+        <span id="audio-icon">🔇</span>
+      </button>
+
+      <button class="nav-btn" id="btn-info" title="Hướng dẫn cài app">
+        <span>ℹ️</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Thông báo chúc phúc / hành động ở giữa màn hình -->
+  <div id="action-toast" class="action-toast hidden">
+    <span class="toast-icon">🙏</span>
+    <span id="toast-text">Đồng tu vừa chắp tay đảnh lễ</span>
+  </div>
+
+  <!-- Pháp danh của bạn ở góc màn hình -->
+  <div class="user-info-card">
+    <span class="label">Pháp danh của bạn:</span>
+    <span class="name" id="user-display-name">Đang kết nối...</span>
+  </div>
+
+  <!-- Thanh công cụ hành động phía dưới màn hình -->
+  <nav class="bottom-bar">
+    <button class="action-btn" id="btn-gassho">
+      <span class="btn-icon">🙏</span>
+      <span class="btn-label">Chắp tay</span>
+    </button>
+
+    <button class="action-btn" id="btn-bow">
+      <span class="btn-icon">🙇</span>
+      <span class="btn-label">Lạy Phật</span>
+    </button>
+
+    <button class="action-btn" id="btn-woodblock">
+      <span class="btn-icon">🪵</span>
+      <span class="btn-label">Gõ mõ</span>
+      <span class="badge" id="moko-count">0</span>
+    </button>
+
+    <button class="action-btn" id="btn-beads">
+      <span class="btn-icon">📿</span>
+      <span class="btn-label">Tràng hạt</span>
+    </button>
+  </nav>
+
+  <!-- Popup Tràng hạt Niệm Phật 108 hạt -->
+  <div id="beads-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>📿 Tràng Hạt Bồ Đề</h3>
+        <button class="close-btn" id="close-beads">&times;</button>
+      </div>
+      
+      <div class="mantra-text">
+        <p class="mantra-main">Nam Mô A Di Đà Phật</p>
+        <p class="mantra-sub">Vuốt hoặc chạm vào hạt để lần tràng hạt niệm Phật</p>
+      </div>
+
+      <div class="bead-interaction-area" id="bead-swipe-zone">
+        <div class="bead-display">
+          <div class="bead active" id="current-bead"></div>
+        </div>
+        <div class="bead-instruction">👆 Chạm hoặc vuốt nhẹ hạt bồ đề</div>
+      </div>
+
+      <div class="bead-stats">
+        <div class="stat-box">
+          <span class="stat-num" id="beads-counted">0</span>
+          <span class="stat-label">Hạt hiện tại (/108)</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-num" id="rounds-counted">0</span>
+          <span class="stat-label">Vòng hoàn thành</span>
+        </div>
+      </div>
+
+      <button class="btn-reset-bead" id="btn-reset-bead">Lần lại từ đầu</button>
+    </div>
+  </div>
+
+  <!-- Popup hướng dẫn Cài App vào Màn hình chính -->
+  <div id="info-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>📱 Chơi dạng App không cần tải</h3>
+        <button class="close-btn" id="close-info">&times;</button>
+      </div>
+      
+      <div class="guide-content">
+        <p>Để chơi toàn màn hình, mượt mà như một ứng dụng độc lập trên điện thoại:</p>
+        
+        <div class="guide-step">
+          <strong>🍏 Dành cho iPhone (Safari):</strong>
+          <p>1. Bấm vào nút <b>Chia sẻ</b> (biểu tượng ô vuông mũi tên lên ở cạnh dưới trình duyệt).</p>
+          <p>2. Chọn mục <b>"Thêm vào MH chính"</b> (Add to Home Screen).</p>
+        </div>
+
+        <div class="guide-step">
+          <strong>🤖 Dành cho Android (Chrome):</strong>
+          <p>1. Bấm nút <b>Menu 3 chấm (⋮)</b> ở góc trên bên phải.</p>
+          <p>2. Chọn <b>"Thêm vào Màn hình chính"</b> hoặc <b>"Cài đặt ứng dụng"</b>.</p>
+        </div>
+        
+        <p class="tip-zen">🌿 <i>Chúc bạn luôn tìm thấy sự an lạc, tĩnh tại nơi tâm hồn.</i></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audio nền tụng kinh ẩn -->
+  <audio id="chant-audio" loop preload="auto">
+    <source src="/audio/temple-chant-review-v1.mp3" type="audio/mpeg">
+  </audio>
+
+  <!-- Script chính của game -->
+  <script src="/app.js"></script>
+</body>
+</html>

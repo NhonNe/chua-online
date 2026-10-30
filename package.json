@@ -1,0 +1,24 @@
+{
+  "name": "chua-online",
+  "version": "1.0.0",
+  "description": "Chùa Online - Trải nghiệm đi chùa, tọa thiền và niệm Phật trực tuyến 3D",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "chua-online",
+    "threejs",
+    "websocket",
+    "buddhism",
+    "meditation",
+    "pwa"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  }
+}
