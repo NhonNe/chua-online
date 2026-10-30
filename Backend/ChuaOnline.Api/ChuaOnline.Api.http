@@ -1,0 +1,6 @@
+@ChuaOnline.Api_HostAddress = http://localhost:5295
+
+GET {{ChuaOnline.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

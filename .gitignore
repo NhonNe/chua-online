@@ -1,0 +1,49 @@
+# .NET / IDE
+**/bin/
+**/obj/
+.dotnet-home/
+.appdata/
+.nuget-packages/
+.vs/
+*.user
+*.suo
+
+# Local secrets
+**/appsettings.Local.json
+**/secrets.json
+*.pfx
+
+# Unity generated folders & files
+**/[Ll]ibrary/
+**/[Tt]emp/
+**/[Oo]bj/
+**/[Bb]uild/
+**/[Bb]uilds/
+**/[Ll]ogs/
+**/[Uu]ser[Ss]ettings/
+**/[Mm]emoryCaptures/
+**/Recordings/
+**/AssetStoreTools*
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# Unity project generator
+Client/GameClient/*.csproj
+Client/GameClient/*.unityproj
+Client/GameClient/*.sln
+Client/GameClient/*.suo
+Client/GameClient/*.user
+Client/GameClient/*.userprefs
+Client/GameClient/*.pidb
+Client/GameClient/*.booproj
+Client/GameClient/*.svd
+Client/GameClient/*.pdb
+Client/GameClient/*.opendb
+Client/GameClient/*.VC.db
+
+# Local test output
+Tests/results/
+
+# Local tools
+Tools/dotnet-ef/
