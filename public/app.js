@@ -219,6 +219,10 @@ for (let r = 0; r < ROWS; r++) {
 
 // 4. Tải Mô hình 3D (Tượng Phật & Chú tiểu)
 const gltfLoader = new THREE.GLTFLoader();
+if (typeof MeshoptDecoder !== 'undefined') {
+  gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+}
+
 const loadingText = document.getElementById('loading-text');
 const progressFill = document.getElementById('progress-fill');
 const loadingScreen = document.getElementById('loading-screen');
@@ -228,61 +232,115 @@ function updateProgress(percent, msg) {
   loadingText.textContent = msg;
 }
 
-updateProgress(20, 'Đang tải Tôn tượng Đức Bổn Sư Thích Ca Mâu Ni...');
-
-gltfLoader.load('/assets/models/buddha.glb', (gltf) => {
-  const buddha = gltf.scene;
-  buddha.traverse((child) => {
-    if (child.isMesh) {
-      child.castShadow = true;
-      child.receiveShadow = true;
-      // Tăng ánh vàng cho tượng Phật
-      if (child.material) {
-        child.material.metalness = 0.55;
-        child.material.roughness = 0.35;
+function sanitizeObject(root) {
+  if (!root) return;
+  root.traverse((obj) => {
+    if (obj.isMesh && obj.geometry) {
+      const geo = obj.geometry;
+      if (geo.attributes) {
+        for (const k in geo.attributes) {
+          if (!geo.attributes[k]) {
+            delete geo.attributes[k];
+          }
+        }
+      }
+      if (geo.morphAttributes) {
+        for (const k in geo.morphAttributes) {
+          if (Array.isArray(geo.morphAttributes[k])) {
+            geo.morphAttributes[k] = geo.morphAttributes[k].filter((attr) => attr != null);
+            if (geo.morphAttributes[k].length === 0) {
+              delete geo.morphAttributes[k];
+            }
+          }
+        }
       }
     }
   });
+}
 
-  // Căn chỉnh kích thước và vị trí tượng Phật trên bục Tam Bảo
-  const box = new THREE.Box3().setFromObject(buddha);
-  const size = box.getSize(new THREE.Vector3());
-  const scale = 3.6 / size.y;
-  buddha.scale.set(scale, scale, scale);
-  buddha.position.set(0, 0.85, -6.6);
-  buddha.rotation.y = 0;
+function startLoading() {
+  updateProgress(20, 'Đang tải Tôn tượng Đức Bổn Sư Thích Ca Mâu Ni...');
 
-  scene.add(buddha);
-  State.buddhaMesh = buddha;
+  gltfLoader.load(
+    '/assets/models/buddha.glb',
+    (gltf) => {
+      const buddha = gltf.scene;
+      sanitizeObject(buddha);
+      buddha.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          if (child.material) {
+            child.material.metalness = 0.55;
+            child.material.roughness = 0.35;
+          }
+        }
+      });
 
-  updateProgress(60, 'Đang khởi tạo nhân vật Chú tiểu Chibi...');
-  loadMonkModel();
-});
+      const box = new THREE.Box3().setFromObject(buddha);
+      const size = box.getSize(new THREE.Vector3());
+      const scale = 3.6 / size.y;
+      buddha.scale.set(scale, scale, scale);
+      buddha.position.set(0, 0.85, -6.6);
+      buddha.rotation.y = 0;
+
+      scene.add(buddha);
+      State.buddhaMesh = buddha;
+
+      updateProgress(60, 'Đang khởi tạo nhân vật Chú tiểu Chibi...');
+      loadMonkModel();
+    },
+    undefined,
+    (err) => {
+      console.warn('Lỗi tải tượng Phật, chuyển sang tải chú tiểu:', err);
+      loadMonkModel();
+    }
+  );
+}
 
 function loadMonkModel() {
-  gltfLoader.load('/assets/models/monk.glb', (gltf) => {
-    State.monkTemplate = gltf.scene;
+  gltfLoader.load(
+    '/assets/models/monk.glb',
+    (gltf) => {
+      State.monkTemplate = gltf.scene;
+      sanitizeObject(State.monkTemplate);
 
-    // Chuẩn hóa tỷ lệ chú tiểu
-    const box = new THREE.Box3().setFromObject(State.monkTemplate);
-    const size = box.getSize(new THREE.Vector3());
-    const monkScale = 1.1 / size.y;
-    State.monkTemplate.scale.set(monkScale, monkScale, monkScale);
+      const box = new THREE.Box3().setFromObject(State.monkTemplate);
+      const size = box.getSize(new THREE.Vector3());
+      const monkScale = 1.1 / size.y;
+      State.monkTemplate.scale.set(monkScale, monkScale, monkScale);
 
-    State.monkTemplate.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
+      State.monkTemplate.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
 
-    updateProgress(100, 'Tịnh tâm thanh tịnh...');
-    setTimeout(() => {
-      loadingScreen.style.opacity = '0';
-      setTimeout(() => loadingScreen.style.display = 'none', 600);
-      connectWebSocket();
-    }, 400);
-  });
+      finishLoading();
+    },
+    undefined,
+    (err) => {
+      console.warn('Lỗi tải mô hình chú tiểu:', err);
+      finishLoading();
+    }
+  );
+}
+
+function finishLoading() {
+  updateProgress(100, 'Tịnh tâm thanh tịnh...');
+  setTimeout(() => {
+    loadingScreen.style.opacity = '0';
+    setTimeout(() => (loadingScreen.style.display = 'none'), 600);
+    connectWebSocket();
+  }, 400);
+}
+
+// Bắt đầu tải sau khi MeshoptDecoder sẵn sàng
+if (typeof MeshoptDecoder !== 'undefined' && MeshoptDecoder.ready) {
+  MeshoptDecoder.ready.then(() => startLoading());
+} else {
+  startLoading();
 }
 
 // 5. Tạo Chú tiểu cho người chơi (Bản thân hoặc Đồng tu khác)
@@ -290,6 +348,7 @@ function createMonkInstance(playerData) {
   if (!State.monkTemplate) return null;
 
   const clone = THREE.SkeletonUtils ? THREE.SkeletonUtils.clone(State.monkTemplate) : State.monkTemplate.clone(true);
+  sanitizeObject(clone);
   
   // Thu thập xương để tạo chuyển động
   const bones = {};
