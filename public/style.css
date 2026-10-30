@@ -477,3 +477,75 @@ body, html {
   margin-top: 16px;
   color: var(--text-muted);
 }
+
+/* Virtual Joystick Controls */
+.joystick-container {
+  position: absolute;
+  bottom: calc(var(--safe-bottom) + 85px);
+  left: 20px;
+  width: 110px;
+  height: 110px;
+  z-index: 100;
+  touch-action: none;
+  user-select: none;
+}
+
+.joystick-base {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgba(30, 26, 21, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1.5px solid rgba(232, 187, 88, 0.3);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.joystick-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #e8bb58 0%, #b88628 100%);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  position: absolute;
+  pointer-events: none;
+  transition: transform 0.05s ease-out;
+}
+
+/* Nút Tọa thiền / Đứng dậy */
+.toggle-sit-btn {
+  position: absolute;
+  bottom: calc(var(--safe-bottom) + 88px);
+  right: 20px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--panel-border);
+  border-radius: 24px;
+  padding: 10px 18px;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 100;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  transition: transform 0.12s ease, border-color 0.2s, background-color 0.2s;
+}
+
+.toggle-sit-btn:active {
+  transform: scale(0.92);
+  border-color: var(--gold-primary);
+  background-color: rgba(232, 187, 88, 0.25);
+}
+
+.toggle-sit-btn #sit-icon {
+  font-size: 16px;
+}

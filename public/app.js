@@ -1,10 +1,10 @@
 // ==========================================
-// CHÙA ONLINE — 3D Client & Realtime System
+// CHÙA ONLINE — 3D Client & Realtime Movement
 // ==========================================
 
 const State = {
   self: null,
-  players: new Map(), // id -> { data, mesh, bones, currentAction, actionTimer }
+  players: new Map(), // id -> { data, mesh, bones, currentAction, actionTimer, isMoving, isSitting, walkCycle, targetPos, targetRot }
   seats: [],          // index -> { position, mesh, occupiedBy }
   audioEnabled: false,
   beadCount: 0,
@@ -13,7 +13,11 @@ const State = {
   ws: null,
   monkTemplate: null,
   buddhaMesh: null,
-  mySeatIndex: -1
+  mySeatIndex: -1,
+  isSitting: true,
+  moveVector: { x: 0, z: 0 },
+  moveSpeed: 2.3,
+  keys: {}
 };
 
 // Khởi tạo Audio Context cho tiếng chuông và mõ
@@ -54,7 +58,6 @@ function playWoodblockSound() {
     osc.start();
     osc.stop(ctx.currentTime + 0.12);
 
-    // Rung điện thoại (Haptic feedback)
     if (navigator.vibrate) navigator.vibrate(25);
   } catch (e) {}
 }
@@ -108,17 +111,16 @@ container.appendChild(renderer.domElement);
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
-controls.maxPolarAngle = Math.PI / 2.05; // Không cho camera chìm dưới sàn
-controls.minPolarAngle = Math.PI / 4.5;
-controls.minDistance = 2.5;
+controls.maxPolarAngle = Math.PI / 2.05;
+controls.minPolarAngle = Math.PI / 5.0;
+controls.minDistance = 2.0;
 controls.maxDistance = 14;
-controls.target.set(0, 1.2, 0);
+controls.target.set(0, 1.0, 0);
 
 // Ánh sáng Chánh Điện
 const ambientLight = new THREE.AmbientLight(0xfff0dd, 0.7);
 scene.add(ambientLight);
 
-// Luồng sáng vàng ấm chiếu rọi tượng Phật từ trên cao
 const buddhaSpotLight = new THREE.SpotLight(0xffdf88, 3.5, 25, Math.PI / 4.5, 0.4, 1.2);
 buddhaSpotLight.position.set(0, 9, -2);
 buddhaSpotLight.target.position.set(0, 2.2, -6.5);
@@ -126,7 +128,6 @@ buddhaSpotLight.castShadow = true;
 scene.add(buddhaSpotLight);
 scene.add(buddhaSpotLight.target);
 
-// Đèn nến / dầu chập chờn hai bên ban thờ
 const candleLeft = new THREE.PointLight(0xff9933, 1.8, 10);
 candleLeft.position.set(-2.4, 1.6, -5.5);
 scene.add(candleLeft);
@@ -135,7 +136,7 @@ const candleRight = new THREE.PointLight(0xff9933, 1.8, 10);
 candleRight.position.set(2.4, 1.6, -5.5);
 scene.add(candleRight);
 
-// Sàn gỗ Chánh điện bóng bẩy
+// Sàn gỗ Chánh điện
 const floorGeo = new THREE.PlaneGeometry(30, 30);
 const floorMat = new THREE.MeshStandardMaterial({
   color: 0x221a14,
@@ -170,16 +171,10 @@ const backWall = new THREE.Mesh(wallGeo, wallMat);
 backWall.position.set(0, 4, -9);
 scene.add(backWall);
 
-// Tạo 36 Bồ đoàn (Đệm ngồi thiền hình tròn xếp thành 6x6)
+// 36 Bồ đoàn (Đệm ngồi thiền hình tròn xếp thành 6x6)
 const cushionGeo = new THREE.CylinderGeometry(0.38, 0.42, 0.12, 24);
-const cushionMat = new THREE.MeshStandardMaterial({
-  color: 0x3d2b20,
-  roughness: 0.85
-});
-const cushionMatActive = new THREE.MeshStandardMaterial({
-  color: 0xa87d32,
-  roughness: 0.7
-});
+const cushionMat = new THREE.MeshStandardMaterial({ color: 0x3d2b20, roughness: 0.85 });
+const cushionMatActive = new THREE.MeshStandardMaterial({ color: 0xa87d32, roughness: 0.7 });
 
 const cushionRaycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -292,7 +287,7 @@ function startLoading() {
     },
     undefined,
     (err) => {
-      console.warn('Lỗi tải tượng Phật, chuyển sang tải chú tiểu:', err);
+      console.warn('Lỗi tải tượng Phật:', err);
       loadMonkModel();
     }
   );
@@ -321,7 +316,7 @@ function loadMonkModel() {
     },
     undefined,
     (err) => {
-      console.warn('Lỗi tải mô hình chú tiểu:', err);
+      console.warn('Lỗi tải chú tiểu:', err);
       finishLoading();
     }
   );
@@ -336,24 +331,22 @@ function finishLoading() {
   }, 400);
 }
 
-// Bắt đầu tải sau khi MeshoptDecoder sẵn sàng
 if (typeof MeshoptDecoder !== 'undefined' && MeshoptDecoder.ready) {
   MeshoptDecoder.ready.then(() => startLoading());
 } else {
   startLoading();
 }
 
-// 5. Tạo Chú tiểu cho người chơi (Bản thân hoặc Đồng tu khác)
+// 5. Tạo Chú tiểu cho người chơi
 function createMonkInstance(playerData) {
   if (!State.monkTemplate) return null;
 
   const clone = THREE.SkeletonUtils ? THREE.SkeletonUtils.clone(State.monkTemplate) : State.monkTemplate.clone(true);
   sanitizeObject(clone);
-  
-  // Thu thập xương để tạo chuyển động
+
   const bones = {};
   clone.traverse((obj) => {
-    if (obj.isBone || obj.type === 'Bone' || (obj.name && (obj.name.includes('arm') || obj.name.includes('hand') || obj.name.includes('spine') || obj.name.includes('head') || obj.name.includes('hips')))) {
+    if (obj.isBone || obj.type === 'Bone' || (obj.name && (obj.name.includes('arm') || obj.name.includes('hand') || obj.name.includes('spine') || obj.name.includes('head') || obj.name.includes('hips') || obj.name.includes('thigh') || obj.name.includes('shin')))) {
       bones[obj.name] = obj;
     }
   });
@@ -385,11 +378,13 @@ function createMonkInstance(playerData) {
 
   scene.add(clone);
 
-  // Đặt vị trí theo số bồ đoàn
-  const seat = State.seats[playerData.seatIndex];
-  if (seat) {
-    clone.position.copy(seat.position);
-    clone.rotation.y = Math.PI; // Hướng mặt về phía Tượng Phật
+  // Vị trí xuất phát
+  if (playerData.seatIndex !== undefined && playerData.seatIndex >= 0 && State.seats[playerData.seatIndex]) {
+    clone.position.copy(State.seats[playerData.seatIndex].position);
+    clone.rotation.y = Math.PI;
+  } else if (playerData.x !== undefined && playerData.z !== undefined) {
+    clone.position.set(playerData.x, 0.06, playerData.z);
+    clone.rotation.y = playerData.rot || Math.PI;
   }
 
   return {
@@ -397,6 +392,11 @@ function createMonkInstance(playerData) {
     bones: bones,
     currentAction: playerData.action || 'idle',
     actionTimer: 0,
+    isMoving: !!playerData.isMoving,
+    isSitting: playerData.isSitting !== undefined ? playerData.isSitting : true,
+    walkCycle: 0,
+    targetPos: clone.position.clone(),
+    targetRot: clone.rotation.y,
     baseRotations: captureBaseRotations(bones)
   };
 }
@@ -409,7 +409,7 @@ function captureBaseRotations(bones) {
   return bases;
 }
 
-// 6. Xử lý Chuyển động (Animations: Ngồi thiền, Chắp tay, Cúi lạy, Gõ mõ)
+// 6. Xử lý Chuyển động (Animations: Đi bộ, Ngồi thiền, Chắp tay, Lạy Phật)
 function updateMonkAnimation(monkData, delta, time) {
   if (!monkData || !monkData.bones) return;
   const b = monkData.bones;
@@ -418,10 +418,35 @@ function updateMonkAnimation(monkData, delta, time) {
 
   monkData.actionTimer += delta;
 
-  // Nhịp thở nhấp nhô nhẹ lúc ngồi thiền
+  // 1. Chuyển động Đi bộ (Walking Waddle)
+  if (monkData.isMoving) {
+    monkData.walkCycle = (monkData.walkCycle || 0) + delta * 11;
+    const wc = monkData.walkCycle;
+
+    // Đánh chân so le
+    if (b['thigh.L'] && base['thigh.L']) b['thigh.L'].rotation.x = base['thigh.L'].x + Math.sin(wc) * 0.45;
+    if (b['thigh.R'] && base['thigh.R']) b['thigh.R'].rotation.x = base['thigh.R'].x - Math.sin(wc) * 0.45;
+
+    // Gập gối khi nhấc chân
+    if (b['shin.L'] && base['shin.L']) b['shin.L'].rotation.x = base['shin.L'].x + Math.max(0, -Math.sin(wc)) * 0.4;
+    if (b['shin.R'] && base['shin.R']) b['shin.R'].rotation.x = base['shin.R'].x + Math.max(0, Math.sin(wc)) * 0.4;
+
+    // Đánh tay tự nhiên ngược chiều chân
+    if (b['upper_arm.L'] && base['upper_arm.L']) b['upper_arm.L'].rotation.x = base['upper_arm.L'].x - Math.sin(wc) * 0.35;
+    if (b['upper_arm.R'] && base['upper_arm.R']) b['upper_arm.R'].rotation.x = base['upper_arm.R'].x + Math.sin(wc) * 0.35;
+
+    // Nhấp nhô hông và lắc lư dễ thương
+    if (b['hips']) b['hips'].position.y = 0.7 + Math.abs(Math.sin(wc)) * 0.04;
+    if (b['spine'] && base['spine']) b['spine'].rotation.z = Math.sin(wc * 0.5) * 0.08;
+    return;
+  }
+
+  // 2. Chuyển động Tọa thiền / Đảnh lễ
+  // Nhịp thở tĩnh lặng
   const breath = Math.sin(time * 2.2) * 0.03;
   if (b['spine'] && base['spine']) {
     b['spine'].rotation.x = base['spine'].x + breath * 0.5;
+    b['spine'].rotation.z = 0;
   }
   if (b['head'] && base['head']) {
     b['head'].rotation.x = base['head'].x - breath * 0.4;
@@ -435,10 +460,9 @@ function updateMonkAnimation(monkData, delta, time) {
     if (b['forearm.L']) b['forearm.L'].rotation.y = THREE.MathUtils.lerp(base['forearm.L']?.y || 0, 1.1, t);
     if (b['forearm.R']) b['forearm.R'].rotation.y = THREE.MathUtils.lerp(base['forearm.R']?.y || 0, -1.1, t);
   }
-  // Hành động Lạy Phật (Cúi rạp người đảnh lễ)
+  // Hành động Lạy Phật (Kowtow)
   else if (action === 'bow') {
     const progress = (monkData.actionTimer % 3.0) / 3.0;
-    // Cúi xuống (0 -> 0.4), giữ (0.4 -> 0.7), nâng lên (0.7 -> 1.0)
     let bowFactor = 0;
     if (progress < 0.4) {
       bowFactor = Math.sin((progress / 0.4) * (Math.PI / 2));
@@ -452,22 +476,21 @@ function updateMonkAnimation(monkData, delta, time) {
     if (b['head']) b['head'].rotation.x = THREE.MathUtils.lerp(base['head']?.x || 0, 0.6, bowFactor);
     if (b['hips']) b['hips'].position.y = THREE.MathUtils.lerp(0.7, 0.35, bowFactor);
 
-    // Tự động trở về trạng thái idle sau 3 giây
     if (monkData.actionTimer >= 3.0) {
       monkData.currentAction = 'idle';
       monkData.actionTimer = 0;
     }
   }
-  // Trạng thái nghỉ / ngồi thiền tĩnh lặng
+  // Trạng thái nghỉ (Tọa thiền hoặc Đứng thẳng)
   else {
     for (let k in base) {
-      if (b[k]) {
+      if (b[k] && !k.includes('spine') && !k.includes('head')) {
         b[k].rotation.x = THREE.MathUtils.lerp(b[k].rotation.x, base[k].x, 0.1);
         b[k].rotation.y = THREE.MathUtils.lerp(b[k].rotation.y, base[k].y, 0.1);
         b[k].rotation.z = THREE.MathUtils.lerp(b[k].rotation.z, base[k].z, 0.1);
       }
     }
-    if (b['hips']) b['hips'].position.y = 0.7;
+    if (b['hips']) b['hips'].position.y = monkData.isSitting ? 0.7 : 0.74;
   }
 }
 
@@ -480,7 +503,6 @@ function connectWebSocket() {
 
   State.ws.onopen = () => {
     console.log('Đã kết nối với máy chủ Chùa Online!');
-    // Gửi ping giữ kết nối mỗi 20s
     setInterval(() => {
       if (State.ws.readyState === WebSocket.OPEN) {
         State.ws.send(JSON.stringify({ type: 'ping' }));
@@ -496,7 +518,6 @@ function connectWebSocket() {
   };
 
   State.ws.onclose = () => {
-    console.log('Mất kết nối, đang thử kết nối lại...');
     setTimeout(connectWebSocket, 3000);
   };
 }
@@ -505,19 +526,19 @@ function handleServerMessage(msg) {
   if (msg.type === 'welcome') {
     State.self = msg.self;
     State.mySeatIndex = msg.self.seatIndex;
+    State.isSitting = msg.self.isSitting !== undefined ? msg.self.isSitting : true;
+    updateSitButtonUI();
+
     document.getElementById('user-display-name').textContent = msg.self.name;
     document.getElementById('online-count').textContent = msg.totalOnline;
 
-    // Dựng bản thân
     const myMonk = createMonkInstance(msg.self);
     State.players.set(msg.self.id, { data: msg.self, ...myMonk });
 
-    // Tiêu điểm camera nhìn về phía mình và tượng Phật
     if (myMonk) {
-      controls.target.copy(myMonk.mesh.position).add(new THREE.Vector3(0, 0.8, -1.5));
+      controls.target.copy(myMonk.mesh.position).add(new THREE.Vector3(0, 0.9, 0));
     }
 
-    // Dựng tất cả người chơi khác đang trong phòng
     msg.players.forEach((p) => {
       if (p.id !== msg.self.id) {
         const monk = createMonkInstance(p);
@@ -533,6 +554,26 @@ function handleServerMessage(msg) {
     const monk = createMonkInstance(msg.player);
     State.players.set(msg.player.id, { data: msg.player, ...monk });
     showToast(`Đồng tu ${msg.player.name} vừa bước vào Chánh điện 🙏`);
+    updateSeatVisuals();
+  }
+
+  if (msg.type === 'player_moved_pos') {
+    const p = State.players.get(msg.id);
+    if (p) {
+      p.targetPos = new THREE.Vector3(msg.x, 0.06, msg.z);
+      p.targetRot = msg.rot;
+      p.isMoving = msg.isMoving;
+      p.isSitting = msg.isSitting;
+      p.data.seatIndex = msg.seatIndex;
+    }
+  }
+
+  if (msg.type === 'player_stood_up') {
+    const p = State.players.get(msg.id);
+    if (p) {
+      p.isSitting = false;
+      p.data.seatIndex = -1;
+    }
     updateSeatVisuals();
   }
 
@@ -553,6 +594,7 @@ function handleServerMessage(msg) {
     const p = State.players.get(msg.id);
     if (p) {
       p.data.seatIndex = msg.seatIndex;
+      p.isSitting = true;
       const seat = State.seats[msg.seatIndex];
       if (seat) p.mesh.position.copy(seat.position);
     }
@@ -574,10 +616,30 @@ function updateSeatVisuals() {
   State.seats.forEach((seat) => {
     let isOccupied = false;
     State.players.forEach((p) => {
-      if (p.data && p.data.seatIndex === seat.index) isOccupied = true;
+      if (p.data && p.data.seatIndex === seat.index && p.isSitting) isOccupied = true;
     });
-    seat.mesh.material = (seat.index === State.mySeatIndex) ? cushionMatActive : cushionMat;
+    seat.mesh.material = (seat.index === State.mySeatIndex && State.isSitting) ? cushionMatActive : cushionMat;
   });
+}
+
+// Gửi di chuyển throttled
+let lastMoveSend = 0;
+function sendMoveThrottled(x, z, rot, isMoving) {
+  const now = performance.now();
+  if (now - lastMoveSend > 60 || !isMoving) {
+    lastMoveSend = now;
+    if (State.ws && State.ws.readyState === WebSocket.OPEN) {
+      State.ws.send(JSON.stringify({
+        type: 'move',
+        x: Math.round(x * 100) / 100,
+        z: Math.round(z * 100) / 100,
+        rot: Math.round(rot * 100) / 100,
+        isMoving: isMoving,
+        isSitting: State.isSitting,
+        seatIndex: State.mySeatIndex
+      }));
+    }
+  }
 }
 
 function sendAction(actionName) {
@@ -588,6 +650,158 @@ function sendAction(actionName) {
   if (myPlayer) {
     myPlayer.currentAction = actionName;
     myPlayer.actionTimer = 0;
+  }
+}
+
+// 8. Điều khiển Bàn phím & Cần điều khiển ảo (Virtual Joystick)
+window.addEventListener('keydown', (e) => {
+  State.keys[e.key.toLowerCase()] = true;
+  State.keys[e.code] = true;
+});
+window.addEventListener('keyup', (e) => {
+  State.keys[e.key.toLowerCase()] = false;
+  State.keys[e.code] = false;
+});
+
+// Joystick Cảm ứng
+const joystickContainer = document.getElementById('joystick-container');
+const joystickThumb = document.getElementById('joystick-thumb');
+let joystickTouchId = null;
+let joystickCenter = { x: 0, y: 0 };
+const JOYSTICK_RADIUS = 38;
+
+if (joystickContainer && joystickThumb) {
+  joystickContainer.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const touch = e.changedTouches[0];
+    joystickTouchId = touch.identifier;
+    const rect = joystickContainer.getBoundingClientRect();
+    joystickCenter = {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2
+    };
+    handleJoystickMove(touch.clientX, touch.clientY);
+  }, { passive: false });
+
+  window.addEventListener('touchmove', (e) => {
+    if (joystickTouchId === null) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === joystickTouchId) {
+        handleJoystickMove(e.changedTouches[i].clientX, e.changedTouches[i].clientY);
+        break;
+      }
+    }
+  }, { passive: false });
+
+  function resetJoystick() {
+    joystickTouchId = null;
+    State.moveVector.x = 0;
+    State.moveVector.z = 0;
+    joystickThumb.style.transform = `translate(0px, 0px)`;
+  }
+
+  window.addEventListener('touchend', (e) => {
+    if (joystickTouchId === null) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === joystickTouchId) {
+        resetJoystick();
+        break;
+      }
+    }
+  });
+  window.addEventListener('touchcancel', resetJoystick);
+
+  function handleJoystickMove(clientX, clientY) {
+    let dx = clientX - joystickCenter.x;
+    let dy = clientY - joystickCenter.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > JOYSTICK_RADIUS) {
+      dx = (dx / dist) * JOYSTICK_RADIUS;
+      dy = (dy / dist) * JOYSTICK_RADIUS;
+    }
+    joystickThumb.style.transform = `translate(${dx}px, ${dy}px)`;
+    State.moveVector.x = dx / JOYSTICK_RADIUS;
+    State.moveVector.z = dy / JOYSTICK_RADIUS;
+  }
+}
+
+// Nút Tọa thiền / Đứng dậy
+const btnToggleSit = document.getElementById('btn-toggle-sit');
+const sitIcon = document.getElementById('sit-icon');
+const sitLabel = document.getElementById('sit-label');
+
+function updateSitButtonUI() {
+  if (!sitIcon || !sitLabel) return;
+  if (State.isSitting) {
+    sitIcon.textContent = '🚶';
+    sitLabel.textContent = 'Đứng dậy';
+  } else {
+    sitIcon.textContent = '🧘';
+    sitLabel.textContent = 'Tọa thiền';
+  }
+}
+
+if (btnToggleSit) {
+  btnToggleSit.addEventListener('click', () => {
+    if (State.isSitting) {
+      standUp();
+    } else {
+      sitDownNearest();
+    }
+  });
+}
+
+function standUp() {
+  State.isSitting = false;
+  State.mySeatIndex = -1;
+  updateSitButtonUI();
+  updateSeatVisuals();
+
+  const myP = State.players.get(State.self?.id);
+  if (myP) {
+    myP.isSitting = false;
+  }
+  if (State.ws && State.ws.readyState === WebSocket.OPEN) {
+    State.ws.send(JSON.stringify({ type: 'stand_up' }));
+  }
+}
+
+function sitDownNearest() {
+  const myP = State.players.get(State.self?.id);
+  if (!myP) return;
+
+  let nearestSeat = -1;
+  let minDist = Infinity;
+  State.seats.forEach((seat) => {
+    let occupied = false;
+    State.players.forEach((p) => {
+      if (p.data && p.data.seatIndex === seat.index && p.isSitting && p.data.id !== State.self?.id) {
+        occupied = true;
+      }
+    });
+    if (!occupied) {
+      const d = myP.mesh.position.distanceTo(seat.position);
+      if (d < minDist) {
+        minDist = d;
+        nearestSeat = seat.index;
+      }
+    }
+  });
+
+  if (nearestSeat !== -1) {
+    const seat = State.seats[nearestSeat];
+    myP.mesh.position.copy(seat.position);
+    myP.mesh.rotation.y = Math.PI;
+    State.mySeatIndex = nearestSeat;
+    State.isSitting = true;
+    myP.isSitting = true;
+    updateSitButtonUI();
+    updateSeatVisuals();
+    playTempleBellSound();
+
+    if (State.ws && State.ws.readyState === WebSocket.OPEN) {
+      State.ws.send(JSON.stringify({ type: 'change_seat', seatIndex: nearestSeat }));
+    }
   }
 }
 
@@ -605,7 +819,7 @@ function showToast(text) {
   }, 3200);
 }
 
-// 8. Đăng ký Sự kiện Tương tác (UI & Cảm ứng)
+// Đăng ký Sự kiện Tương tác (UI & Cảm ứng)
 document.getElementById('btn-gassho').addEventListener('click', () => {
   sendAction('gassho');
   playTempleBellSound();
@@ -692,10 +906,9 @@ document.getElementById('close-info').addEventListener('click', () => {
   infoModal.classList.add('hidden');
 });
 
-// Chọn bồ đoàn khác bằng cách chạm vào đệm
+// Chọn bồ đoàn bằng cách chạm
 window.addEventListener('pointerdown', (e) => {
-  // Chỉ nhận chạm vào canvas, bỏ qua các nút bấm UI
-  if (e.target.tagName === 'BUTTON' || e.target.closest('.bottom-bar') || e.target.closest('.top-nav') || e.target.closest('.modal-card')) {
+  if (e.target.tagName === 'BUTTON' || e.target.closest('.bottom-bar') || e.target.closest('.top-nav') || e.target.closest('.modal-card') || e.target.closest('.joystick-container') || e.target.closest('.toggle-sit-btn')) {
     return;
   }
   mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -706,41 +919,115 @@ window.addEventListener('pointerdown', (e) => {
 
   if (intersects.length > 0) {
     const clickedSeat = intersects[0].object.userData.seatIndex;
-    if (clickedSeat !== undefined && clickedSeat !== State.mySeatIndex) {
-      if (State.ws && State.ws.readyState === WebSocket.OPEN) {
-        State.ws.send(JSON.stringify({ type: 'change_seat', seatIndex: clickedSeat }));
+    if (clickedSeat !== undefined) {
+      const seat = State.seats[clickedSeat];
+      const myP = State.players.get(State.self?.id);
+      if (myP && seat) {
+        myP.mesh.position.copy(seat.position);
+        myP.mesh.rotation.y = Math.PI;
         State.mySeatIndex = clickedSeat;
-        const myP = State.players.get(State.self?.id);
-        if (myP) myP.mesh.position.copy(State.seats[clickedSeat].position);
+        State.isSitting = true;
+        myP.isSitting = true;
+        updateSitButtonUI();
         updateSeatVisuals();
         playTempleBellSound();
+
+        if (State.ws && State.ws.readyState === WebSocket.OPEN) {
+          State.ws.send(JSON.stringify({ type: 'change_seat', seatIndex: clickedSeat }));
+        }
       }
     }
   }
 });
 
-// Resize cửa sổ
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// 9. Vòng lặp Render (60 FPS)
+// 9. Vòng lặp Render (60 FPS) & Cập nhật Di chuyển
 const clock = new THREE.Clock();
 
 function animate() {
   requestAnimationFrame(animate);
 
-  const delta = clock.getDelta();
+  const delta = Math.min(clock.getDelta(), 0.1);
   const time = clock.getElapsedTime();
 
-  // Đèn nến chập chờn tự nhiên
+  // Đèn nến lung linh
   candleLeft.intensity = 1.6 + Math.sin(time * 8) * 0.25 + Math.cos(time * 15) * 0.15;
   candleRight.intensity = 1.6 + Math.cos(time * 7) * 0.25 + Math.sin(time * 13) * 0.15;
 
-  // Cập nhật chuyển động cho tất cả các Chú tiểu
-  State.players.forEach((p) => {
+  // Cập nhật di chuyển cho nhân vật của người chơi
+  const myPlayer = State.players.get(State.self?.id);
+  if (myPlayer && myPlayer.mesh) {
+    let inputX = State.moveVector.x;
+    let inputZ = State.moveVector.z;
+
+    if (State.keys['w'] || State.keys['arrowup'] || State.keys['keyw']) inputZ -= 1;
+    if (State.keys['s'] || State.keys['arrowdown'] || State.keys['keys']) inputZ += 1;
+    if (State.keys['a'] || State.keys['arrowleft'] || State.keys['keya']) inputX -= 1;
+    if (State.keys['d'] || State.keys['arrowright'] || State.keys['keyd']) inputX += 1;
+
+    const inputLen = Math.hypot(inputX, inputZ);
+
+    if (inputLen > 0.08) {
+      if (State.isSitting) {
+        standUp();
+      }
+
+      const camDir = new THREE.Vector3();
+      camera.getWorldDirection(camDir);
+      camDir.y = 0;
+      camDir.normalize();
+
+      const camSide = new THREE.Vector3(-camDir.z, 0, camDir.x);
+
+      const moveDir = new THREE.Vector3()
+        .addScaledVector(camDir, -inputZ / Math.max(1, inputLen))
+        .addScaledVector(camSide, inputX / Math.max(1, inputLen));
+
+      const moveStep = moveDir.clone().multiplyScalar(State.moveSpeed * delta);
+      const newPos = myPlayer.mesh.position.clone().add(moveStep);
+
+      // Giới hạn biên Chánh điện
+      newPos.x = THREE.MathUtils.clamp(newPos.x, -7.0, 7.0);
+      newPos.z = THREE.MathUtils.clamp(newPos.z, -4.6, 6.8);
+
+      myPlayer.mesh.position.copy(newPos);
+
+      const targetAngle = Math.atan2(moveDir.x, moveDir.z);
+      // Xoay góc mặt mượt
+      let diff = targetAngle - myPlayer.mesh.rotation.y;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      myPlayer.mesh.rotation.y += diff * 0.2;
+
+      myPlayer.isMoving = true;
+      sendMoveThrottled(newPos.x, newPos.z, myPlayer.mesh.rotation.y, true);
+    } else {
+      if (myPlayer.isMoving) {
+        myPlayer.isMoving = false;
+        sendMoveThrottled(myPlayer.mesh.position.x, myPlayer.mesh.position.z, myPlayer.mesh.rotation.y, false);
+      }
+    }
+
+    // Camera 3rd-person mượt mà theo sau chú tiểu
+    controls.target.lerp(new THREE.Vector3(myPlayer.mesh.position.x, 0.9, myPlayer.mesh.position.z), 0.08);
+  }
+
+  // Cập nhật người chơi khác (nội suy vị trí)
+  State.players.forEach((p, id) => {
+    if (id !== State.self?.id && p.targetPos) {
+      p.mesh.position.lerp(p.targetPos, 0.2);
+      if (p.targetRot !== undefined) {
+        let diff = p.targetRot - p.mesh.rotation.y;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        p.mesh.rotation.y += diff * 0.2;
+      }
+    }
     updateMonkAnimation(p, delta, time);
   });
 
@@ -750,7 +1037,7 @@ function animate() {
 
 animate();
 
-// Đăng ký Service Worker cho PWA
+// Service Worker PWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {});

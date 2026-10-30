@@ -69,7 +69,12 @@ wss.on('connection', (ws, req) => {
     id: clientId,
     name: clientName,
     seatIndex: clientSeat,
-    action: 'idle'
+    action: 'idle',
+    x: 0,
+    z: 0,
+    rot: Math.PI,
+    isMoving: false,
+    isSitting: true
   };
 
   room.clients.set(clientId, { ws, ...clientData });
@@ -83,7 +88,12 @@ wss.on('connection', (ws, req) => {
       id: c.id,
       name: c.name,
       seatIndex: c.seatIndex,
-      action: c.action
+      action: c.action,
+      x: c.x,
+      z: c.z,
+      rot: c.rot,
+      isMoving: c.isMoving,
+      isSitting: c.isSitting
     });
   });
 
@@ -121,6 +131,50 @@ wss.on('connection', (ws, req) => {
           name: clientName,
           action: data.action,
           seatIndex: clientSeat
+        });
+      }
+
+      if (data.type === 'move') {
+        clientData.x = data.x;
+        clientData.z = data.z;
+        clientData.rot = data.rot;
+        clientData.isMoving = data.isMoving;
+        clientData.isSitting = data.isSitting;
+        clientData.seatIndex = data.seatIndex;
+
+        const c = room.clients.get(clientId);
+        if (c) {
+          c.x = data.x;
+          c.z = data.z;
+          c.rot = data.rot;
+          c.isMoving = data.isMoving;
+          c.isSitting = data.isSitting;
+          c.seatIndex = data.seatIndex;
+        }
+
+        broadcastToRoom(currentRoomId, {
+          type: 'player_moved_pos',
+          id: clientId,
+          x: data.x,
+          z: data.z,
+          rot: data.rot,
+          isMoving: data.isMoving,
+          isSitting: data.isSitting,
+          seatIndex: data.seatIndex
+        }, clientId);
+      }
+
+      if (data.type === 'stand_up') {
+        if (clientSeat !== -1 && room.seats[clientSeat] === clientId) {
+          room.seats[clientSeat] = null;
+        }
+        clientSeat = -1;
+        clientData.seatIndex = -1;
+        clientData.isSitting = false;
+
+        broadcastToRoom(currentRoomId, {
+          type: 'player_stood_up',
+          id: clientId
         });
       }
 
