@@ -383,7 +383,7 @@ function createMonkInstance(playerData) {
     clone.position.copy(State.seats[playerData.seatIndex].position);
     clone.rotation.y = Math.PI;
   } else if (playerData.x !== undefined && playerData.z !== undefined) {
-    clone.position.set(playerData.x, 0.06, playerData.z);
+    clone.position.set(playerData.x, playerData.isSitting ? 0.12 : 0.02, playerData.z);
     clone.rotation.y = playerData.rot || Math.PI;
   }
 
@@ -409,7 +409,7 @@ function captureBaseRotations(bones) {
   return bases;
 }
 
-// 6. Xử lý Chuyển động (Animations: Đi bộ, Ngồi thiền, Chắp tay, Lạy Phật)
+// 6. Xử lý Chuyển động (Animations: Đi bộ chibi kinh hành, Ngồi thiền, Chắp tay, Lạy Phật)
 function updateMonkAnimation(monkData, delta, time) {
   if (!monkData || !monkData.bones) return;
   const b = monkData.bones;
@@ -418,40 +418,89 @@ function updateMonkAnimation(monkData, delta, time) {
 
   monkData.actionTimer += delta;
 
-  // 1. Chuyển động Đi bộ (Walking Waddle)
+  // Cập nhật cao độ êm ái giữa ngồi thiền (y=0.12 trên bồ đoàn) và đứng/đi bộ (y=0.02 trên sàn)
+  if (monkData.mesh) {
+    const targetY = monkData.isSitting ? 0.12 : 0.02;
+    monkData.mesh.position.y = THREE.MathUtils.lerp(monkData.mesh.position.y, targetY, 0.15);
+  }
+
+  // 1. CHUYỂN ĐỘNG ĐI BỘ (Chibi Kinh Hành Siêu Dễ Thương & Tự Nhiên)
   if (monkData.isMoving) {
-    monkData.walkCycle = (monkData.walkCycle || 0) + delta * 11;
+    // Tần số bước đi thanh thản, nhịp nhàng (~7.8 rad/s)
+    monkData.walkCycle = (monkData.walkCycle || 0) + delta * 7.8;
     const wc = monkData.walkCycle;
+    const stride = Math.sin(wc);
 
-    // Đánh chân so le
-    if (b['thigh.L'] && base['thigh.L']) b['thigh.L'].rotation.x = base['thigh.L'].x + Math.sin(wc) * 0.45;
-    if (b['thigh.R'] && base['thigh.R']) b['thigh.R'].rotation.x = base['thigh.R'].x - Math.sin(wc) * 0.45;
+    // 1.1. Đánh đùi so le (Thigh swing):
+    // Khi stride > 0: Chân trái bước tới (thigh.L quay âm), Chân phải bước lui (thigh.R quay dương)
+    if (b['thigh.L'] && base['thigh.L']) {
+      b['thigh.L'].rotation.x = base['thigh.L'].x - stride * 0.42;
+    }
+    if (b['thigh.R'] && base['thigh.R']) {
+      b['thigh.R'].rotation.x = base['thigh.R'].x + stride * 0.42;
+    }
 
-    // Gập gối khi nhấc chân
-    if (b['shin.L'] && base['shin.L']) b['shin.L'].rotation.x = base['shin.L'].x + Math.max(0, -Math.sin(wc)) * 0.4;
-    if (b['shin.R'] && base['shin.R']) b['shin.R'].rotation.x = base['shin.R'].x + Math.max(0, Math.sin(wc)) * 0.4;
+    // 1.2. Gập gối tự nhiên khi nhấc chân sau (Shin flexion):
+    // Chân trái ở sau khi stride < 0 -> gập gối về sau (quay dương)
+    if (b['shin.L'] && base['shin.L']) {
+      const bendL = Math.max(0, -stride) * 0.58;
+      b['shin.L'].rotation.x = base['shin.L'].x + bendL;
+    }
+    // Chân phải ở sau khi stride > 0 -> gập gối về sau
+    if (b['shin.R'] && base['shin.R']) {
+      const bendR = Math.max(0, stride) * 0.58;
+      b['shin.R'].rotation.x = base['shin.R'].x + bendR;
+    }
 
-    // Đánh tay tự nhiên ngược chiều chân
-    if (b['upper_arm.L'] && base['upper_arm.L']) b['upper_arm.L'].rotation.x = base['upper_arm.L'].x - Math.sin(wc) * 0.35;
-    if (b['upper_arm.R'] && base['upper_arm.R']) b['upper_arm.R'].rotation.x = base['upper_arm.R'].x + Math.sin(wc) * 0.35;
+    // 1.3. Uốn bàn chân (Foot roll):
+    if (b['foot.L'] && base['foot.L']) {
+      const flexL = stride > 0 ? stride * 0.14 : -Math.max(0, -stride) * 0.22;
+      b['foot.L'].rotation.x = base['foot.L'].x + flexL;
+    }
+    if (b['foot.R'] && base['foot.R']) {
+      const flexR = stride < 0 ? -stride * 0.14 : -Math.max(0, stride) * 0.22;
+      b['foot.R'].rotation.x = base['foot.R'].x + flexR;
+    }
 
-    // Nhấp nhô hông và lắc lư dễ thương
-    if (b['hips']) b['hips'].position.y = 0.7 + Math.abs(Math.sin(wc)) * 0.04;
-    if (b['spine'] && base['spine']) b['spine'].rotation.z = Math.sin(wc * 0.5) * 0.08;
+    // 1.4. Đánh tay chibi tự nhiên ngược chiều chân:
+    // Chân trái tới (stride > 0) -> Tay trái đánh lui (quay dương), Tay phải đánh tới (quay âm)
+    if (b['upper_arm.L'] && base['upper_arm.L']) {
+      b['upper_arm.L'].rotation.x = base['upper_arm.L'].x + stride * 0.28;
+      b['upper_arm.L'].rotation.z = base['upper_arm.L'].z;
+    }
+    if (b['upper_arm.R'] && base['upper_arm.R']) {
+      b['upper_arm.R'].rotation.x = base['upper_arm.R'].x - stride * 0.28;
+      b['upper_arm.R'].rotation.z = base['upper_arm.R'].z;
+    }
+    // Khuỷu tay hơi chùng tự nhiên
+    if (b['forearm.L'] && base['forearm.L']) {
+      b['forearm.L'].rotation.x = base['forearm.L'].x + Math.max(0, -stride) * 0.18;
+    }
+    if (b['forearm.R'] && base['forearm.R']) {
+      b['forearm.R'].rotation.x = base['forearm.R'].x + Math.max(0, stride) * 0.18;
+    }
+
+    // 1.5. Nhấp nhô hông (Pelvis bounce) theo mỗi bước chân
+    if (b['hips']) {
+      b['hips'].position.y = 0.70 + Math.abs(Math.sin(wc)) * 0.03;
+    }
+
+    // 1.6. Thân mình lắc lư chibi waddle sang 2 bên
+    if (b['spine'] && base['spine']) {
+      b['spine'].rotation.z = Math.sin(wc) * 0.055;
+      b['spine'].rotation.x = base['spine'].x + 0.06;
+    }
+
+    // 1.7. Đầu lắc lư ngược chiều thân (đặc trưng anime chibi cực dễ thương)
+    if (b['head'] && base['head']) {
+      b['head'].rotation.z = -Math.sin(wc) * 0.04;
+      b['head'].rotation.x = base['head'].x - 0.03 + Math.sin(wc * 2) * 0.015;
+    }
+
     return;
   }
 
-  // 2. Chuyển động Tọa thiền / Đảnh lễ
-  // Nhịp thở tĩnh lặng
-  const breath = Math.sin(time * 2.2) * 0.03;
-  if (b['spine'] && base['spine']) {
-    b['spine'].rotation.x = base['spine'].x + breath * 0.5;
-    b['spine'].rotation.z = 0;
-  }
-  if (b['head'] && base['head']) {
-    b['head'].rotation.x = base['head'].x - breath * 0.4;
-  }
-
+  // 2. CÁC HÀNH ĐỘNG TƯƠNG TÁC (Chắp tay, Lạy Phật)
   // Hành động Chắp tay (Gassho)
   if (action === 'gassho') {
     const t = Math.min(monkData.actionTimer * 4.0, 1.0);
@@ -459,6 +508,8 @@ function updateMonkAnimation(monkData, delta, time) {
     if (b['upper_arm.R']) b['upper_arm.R'].rotation.z = THREE.MathUtils.lerp(base['upper_arm.R']?.z || 0, 0.65, t);
     if (b['forearm.L']) b['forearm.L'].rotation.y = THREE.MathUtils.lerp(base['forearm.L']?.y || 0, 1.1, t);
     if (b['forearm.R']) b['forearm.R'].rotation.y = THREE.MathUtils.lerp(base['forearm.R']?.y || 0, -1.1, t);
+    if (b['head']) b['head'].rotation.x = THREE.MathUtils.lerp(base['head']?.x || 0, 0.15, t);
+    return;
   }
   // Hành động Lạy Phật (Kowtow)
   else if (action === 'bow') {
@@ -480,17 +531,31 @@ function updateMonkAnimation(monkData, delta, time) {
       monkData.currentAction = 'idle';
       monkData.actionTimer = 0;
     }
+    return;
   }
-  // Trạng thái nghỉ (Tọa thiền hoặc Đứng thẳng)
-  else {
-    for (let k in base) {
-      if (b[k] && !k.includes('spine') && !k.includes('head')) {
-        b[k].rotation.x = THREE.MathUtils.lerp(b[k].rotation.x, base[k].x, 0.1);
-        b[k].rotation.y = THREE.MathUtils.lerp(b[k].rotation.y, base[k].y, 0.1);
-        b[k].rotation.z = THREE.MathUtils.lerp(b[k].rotation.z, base[k].z, 0.1);
-      }
+
+  // 3. TRẠNG THÁI NGHỈ / TĨNH TÂM (Đứng tịnh tâm hoặc Tọa thiền)
+  // Nhịp thở tĩnh lặng
+  const breath = Math.sin(time * 2.2) * 0.025;
+  if (b['spine'] && base['spine']) {
+    b['spine'].rotation.x = THREE.MathUtils.lerp(b['spine'].rotation.x, base['spine'].x + breath * 0.4, 0.1);
+    b['spine'].rotation.z = THREE.MathUtils.lerp(b['spine'].rotation.z, 0, 0.1);
+  }
+  if (b['head'] && base['head']) {
+    b['head'].rotation.x = THREE.MathUtils.lerp(b['head'].rotation.x, base['head'].x - breath * 0.3, 0.1);
+    b['head'].rotation.z = THREE.MathUtils.lerp(b['head'].rotation.z, 0, 0.1);
+  }
+
+  // Hồi phục các xương tay chân về trạng thái ban đầu một cách êm dịu
+  for (let k in base) {
+    if (b[k] && !k.includes('spine') && !k.includes('head')) {
+      b[k].rotation.x = THREE.MathUtils.lerp(b[k].rotation.x, base[k].x, 0.12);
+      b[k].rotation.y = THREE.MathUtils.lerp(b[k].rotation.y, base[k].y, 0.12);
+      b[k].rotation.z = THREE.MathUtils.lerp(b[k].rotation.z, base[k].z, 0.12);
     }
-    if (b['hips']) b['hips'].position.y = monkData.isSitting ? 0.7 : 0.74;
+  }
+  if (b['hips']) {
+    b['hips'].position.y = THREE.MathUtils.lerp(b['hips'].position.y, 0.70, 0.1);
   }
 }
 
@@ -560,7 +625,7 @@ function handleServerMessage(msg) {
   if (msg.type === 'player_moved_pos') {
     const p = State.players.get(msg.id);
     if (p) {
-      p.targetPos = new THREE.Vector3(msg.x, 0.06, msg.z);
+      p.targetPos = new THREE.Vector3(msg.x, msg.isSitting ? 0.12 : 0.02, msg.z);
       p.targetRot = msg.rot;
       p.isMoving = msg.isMoving;
       p.isSitting = msg.isSitting;
@@ -573,6 +638,7 @@ function handleServerMessage(msg) {
     if (p) {
       p.isSitting = false;
       p.data.seatIndex = -1;
+      if (p.targetPos) p.targetPos.y = 0.02;
     }
     updateSeatVisuals();
   }
@@ -994,6 +1060,7 @@ function animate() {
       // Giới hạn biên Chánh điện
       newPos.x = THREE.MathUtils.clamp(newPos.x, -7.0, 7.0);
       newPos.z = THREE.MathUtils.clamp(newPos.z, -4.6, 6.8);
+      newPos.y = 0.02;
 
       myPlayer.mesh.position.copy(newPos);
 
@@ -1013,8 +1080,12 @@ function animate() {
       }
     }
 
-    // Camera 3rd-person mượt mà theo sau chú tiểu
-    controls.target.lerp(new THREE.Vector3(myPlayer.mesh.position.x, 0.9, myPlayer.mesh.position.z), 0.08);
+    // Camera 3rd-person mượt mà theo sau chú tiểu (tịnh tiến camera theo bước đi)
+    const prevTarget = controls.target.clone();
+    const desiredTarget = new THREE.Vector3(myPlayer.mesh.position.x, 0.9, myPlayer.mesh.position.z);
+    controls.target.lerp(desiredTarget, 0.1);
+    const deltaTarget = controls.target.clone().sub(prevTarget);
+    camera.position.add(deltaTarget);
   }
 
   // Cập nhật người chơi khác (nội suy vị trí)
